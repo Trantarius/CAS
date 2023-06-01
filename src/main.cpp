@@ -1,6 +1,8 @@
-#include "util.hpp"
+#include <strings.hpp>
+#include <io.hpp>
 
 int main(){
-  print("hello");
+  util::print("hello");
+  util::bloc<uchar> file=util::readfile("test/test.txt");
   return 0;
 }
