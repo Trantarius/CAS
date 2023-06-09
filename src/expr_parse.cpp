@@ -77,6 +77,17 @@ struct Token{
   }
 };
 
+
+
+
+
+
+
+
+
+
+
+
 //convert 'a - b' into 'a + -b'
 list<Token> sub_to_add_negate(list<Token> tokens){
   for(auto it=++tokens.begin();it!=--tokens.end();it++){
@@ -92,6 +103,34 @@ list<Token> sub_to_add_negate(list<Token> tokens){
   }
   return tokens;
 }
+
+//convert '5n' to '5*n'
+list<Token> adj_coefficient(list<Token> tokens){
+  for(auto it=tokens.begin();it!=--tokens.end();it++){
+    auto next=it;
+    next++;
+    if(it->type!=Token::OPERATOR && next->type!=Token::OPERATOR){
+      Token tok(Token::OPERATOR);
+      tok.oper='*';
+      tokens.insert(next,tok);
+      it++;
+    }
+  }
+  return tokens;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -144,6 +183,7 @@ list<Token> tokenize(string text,size_t start,size_t end){
   }
 
   tokens=sub_to_add_negate(tokens);
+  tokens=adj_coefficient(tokens);
 
   return tokens;
 }
