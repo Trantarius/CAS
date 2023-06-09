@@ -1,4 +1,4 @@
-g++ -w -O3 -std=c++17 -ICUtil $(find src -name "*.cpp") -o exe
+g++ -w -O3 -std=c++20 -ICUtil $(find src -name "*.cpp") -o exe
 echo
 echo compiled
 echo
