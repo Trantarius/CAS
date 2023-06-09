@@ -3,6 +3,7 @@
 
 using namespace std;
 using namespace util;
+using parse_error = Expr::parse_error;
 
 
 const map<char,uchar> operator_precedence{
@@ -41,7 +42,7 @@ size_t skip_paren(string text,size_t start){
   size_t idx=start+1;
   while(true){
     if(idx>=text.size()){
-      throw std::runtime_error("unclosed parentheses");
+      throw parse_error("unclosed parentheses");
     }else if(text[idx]=='('){
       idx=skip_paren(text,start);
     }else if(text[idx]==')'){
@@ -75,6 +76,23 @@ struct Token{
     }
   }
 };
+
+//convert 'a - b' into 'a + -b'
+list<Token> sub_to_add_negate(list<Token> tokens){
+  for(auto it=++tokens.begin();it!=--tokens.end();it++){
+    if(it->type==Token::OPERATOR && it->oper=='-'){
+      auto prev=--list<Token>::iterator(it);
+      auto next=++list<Token>::iterator(it);
+      if(prev->type!=Token::OPERATOR && next->type!=Token::OPERATOR){
+        Token tok(Token::OPERATOR);
+        tok.oper='+';
+        tokens.insert(it,tok);
+      }
+    }
+  }
+  return tokens;
+}
+
 
 
 list<Token> tokenize(string text,size_t start,size_t end){
@@ -121,22 +139,11 @@ list<Token> tokenize(string text,size_t start,size_t end){
     }
 
     else{
-      throw runtime_error(string("Unknown character in expression (")+tostr(text[idx])+"): "+text[idx]);
+      throw parse_error(string("Unknown character in expression (")+tostr(text[idx])+"): "+text[idx]);
     }
   }
 
-  //convert any "a - b" into "a + -b"
-  for(auto it=++tokens.begin();it!=--tokens.end();it++){
-    if(it->type==Token::OPERATOR && it->oper=='-'){
-      auto prev=--list<Token>::iterator(it);
-      auto next=++list<Token>::iterator(it);
-      if(prev->type!=Token::OPERATOR && next->type!=Token::OPERATOR){
-        Token tok(Token::OPERATOR);
-        tok.oper='+';
-        tokens.insert(it,tok);
-      }
-    }
-  }
+  tokens=sub_to_add_negate(tokens);
 
   return tokens;
 }
@@ -166,7 +173,7 @@ list<list<Token>> split_tokens(list<Token> tokens,char oper){
 
 Expr expr_from_tokens(list<Token> tokens){
   if(tokens.empty()){
-    throw logic_error("Can't make expression from empty tokens");
+    throw parse_error("Can't make expression from empty tokens");
   }
 
   Expr ret;
@@ -180,7 +187,7 @@ Expr expr_from_tokens(list<Token> tokens){
 
   if(highest_op==CHAR_MAX){
     if(tokens.size()!=1){
-      throw runtime_error("Adjacent tokens without operator: "+tokens_string(tokens));
+      throw parse_error("Adjacent tokens without operator: "+tokens_string(tokens));
     }
 
     Token token=*tokens.begin();
@@ -211,7 +218,7 @@ Expr expr_from_tokens(list<Token> tokens){
       return expr_from_tokens(token.subtokens);
     }
     else{
-      throw runtime_error("unparseable tokens: "+tokens_string(tokens));
+      throw parse_error("unparseable tokens: "+tokens_string(tokens));
     }
   }
 
@@ -260,7 +267,7 @@ Expr expr_from_tokens(list<Token> tokens){
 
     list<list<Token>> parts=split_tokens(tokens,'^');
     if(parts.size()>2){
-      throw runtime_error("Chained ^ is not allowed");
+      throw parse_error("Chained ^ is not allowed");
     }
 
     Power power;
@@ -274,7 +281,7 @@ Expr expr_from_tokens(list<Token> tokens){
 
     Token start=*tokens.begin();
     if(start.type!=Token::OPERATOR || start.oper!='-'){
-      throw runtime_error("invalid expression: "+tokens_string(tokens));
+      throw parse_error("invalid expression: "+tokens_string(tokens));
     }
     tokens.pop_front();
 
@@ -284,12 +291,17 @@ Expr expr_from_tokens(list<Token> tokens){
   }
 
   else{
-    throw runtime_error("unparseable tokens: "+tokens_string(tokens));
+    throw parse_error("unparseable tokens: "+tokens_string(tokens));
   }
 }
 
 Expr::Expr(string text){
-  *this=expr_from_tokens(tokenize(text,0,text.size()));
+  try{
+    *this=expr_from_tokens(tokenize(text,0,text.size()));
+  }
+  catch(parse_error& err){
+    throw parse_error(err.what()+string("\nInput: \'")+text+"\'");
+  }
 }
 
 

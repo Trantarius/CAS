@@ -2,6 +2,7 @@
 #include <strings.hpp>
 #include <list>
 #include <memory>
+#include <cstring>
 
 enum ValType{SCALAR,VECTOR,MATRIX};
 enum ExprType{
@@ -30,6 +31,11 @@ struct Node{
 };
 
 struct Expr{
+
+  struct parse_error : std::logic_error{
+    parse_error(std::string msg):std::logic_error(msg){}
+  };
+
   NodeRef root=nullptr;
 
   ExprType get_type() const{
