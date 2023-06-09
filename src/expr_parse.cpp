@@ -7,10 +7,10 @@ using parse_error = Expr::parse_error;
 
 
 const map<char,uchar> operator_precedence{
+  {'^',0},//this matches c++ precedence
   {'+',1},
   {'*',2},
   {'/',3},
-  {'^',4},
   {'-',5},//only for negation, not subtraction
   {CHAR_MAX,UINT64_MAX}//fake
 };
@@ -104,6 +104,22 @@ list<Token> sub_to_add_negate(list<Token> tokens){
   return tokens;
 }
 
+//convert 'a / b' into 'a * /b'
+list<Token> div_to_mul_recip(list<Token> tokens){
+  for(auto it=++tokens.begin();it!=--tokens.end();it++){
+    if(it->type==Token::OPERATOR && it->oper=='/'){
+      auto prev=--list<Token>::iterator(it);
+      auto next=++list<Token>::iterator(it);
+      if(prev->type!=Token::OPERATOR && next->type!=Token::OPERATOR){
+        Token tok(Token::OPERATOR);
+        tok.oper='*';
+        tokens.insert(it,tok);
+      }
+    }
+  }
+  return tokens;
+}
+
 //convert '5n' to '5*n'
 list<Token> adj_coefficient(list<Token> tokens){
   for(auto it=tokens.begin();it!=--tokens.end();it++){
@@ -182,8 +198,10 @@ list<Token> tokenize(string text,size_t start,size_t end){
     }
   }
 
-  tokens=sub_to_add_negate(tokens);
+
   tokens=adj_coefficient(tokens);
+  tokens=sub_to_add_negate(tokens);
+  tokens=div_to_mul_recip(tokens);
 
   return tokens;
 }
@@ -264,70 +282,65 @@ Expr expr_from_tokens(list<Token> tokens){
 
   else if(highest_op=='+'){
 
-    Sum sum;
-    for(list<Token> part : split_tokens(tokens,'+')){
-      sum.sub.push_back(expr_from_tokens(part));
+    Expr sum;
+    list<list<Token>> parts=split_tokens(tokens,'+');
+    auto it=parts.begin();
+    sum=expr_from_tokens(*it);
+    it++;
+    for(;it!=parts.end();it++){
+      sum = move(sum) + expr_from_tokens(*it);
     }
-    return Expr(sum);
+    return sum;
   }
 
   else if(highest_op=='*'){
 
-    Product product;
-    for(list<Token> part : split_tokens(tokens,'*')){
-      product.sub.push_back(expr_from_tokens(part));
+    Expr prod;
+    list<list<Token>> parts=split_tokens(tokens,'*');
+    auto it=parts.begin();
+    prod=expr_from_tokens(*it);
+    it++;
+    for(;it!=parts.end();it++){
+      prod = move(prod) * expr_from_tokens(*it);
     }
-    return Expr(product);
+    return prod;
   }
 
   else if(highest_op=='/'){
-    list<list<Token>> parts=split_tokens(tokens,'/');
-
-    Reciprocal recip;
-    if(parts.size()>2){
-
-      Product denom;
-      for(auto it=++parts.begin();it!=parts.end();it++){
-        denom.sub.push_back(expr_from_tokens(*it));
-      }
-      recip.sub=Expr(denom);
-
-    }else{
-      recip.sub=expr_from_tokens(*++parts.begin());
+    Token start=*tokens.begin();
+    if(start.type!=Token::OPERATOR || start.oper!='/'){
+      throw parse_error("expected reciprocal: "+tokens_string(tokens));
     }
+    tokens.pop_front();
 
-    Product prod;
-    prod.sub.push_back(expr_from_tokens(*parts.begin()));
-    prod.sub.push_back(Expr(recip));
-
-    return Expr(prod);
+    Reciprocal* rec=new Reciprocal();
+    rec->sub=expr_from_tokens(tokens);
+    return Expr(NodeRef(rec));
   }
 
   else if(highest_op=='^'){
 
-    list<list<Token>> parts=split_tokens(tokens,'^');
-    if(parts.size()>2){
-      throw parse_error("Chained ^ is not allowed");
+    list<Token> exptok;
+    while(!(tokens.back().type==Token::OPERATOR && tokens.back().oper=='^')){
+      exptok.push_front(tokens.back());
+      tokens.pop_back();
     }
+    tokens.pop_back();
 
-    Power power;
-    power.base=expr_from_tokens(*parts.begin());
-    power.power=expr_from_tokens(*++parts.begin());
-
-    return Expr(power);
+    return expr_from_tokens(tokens) ^ expr_from_tokens(exptok);
   }
 
   else if(highest_op=='-'){
 
     Token start=*tokens.begin();
     if(start.type!=Token::OPERATOR || start.oper!='-'){
-      throw parse_error("invalid expression: "+tokens_string(tokens));
+      throw parse_error("expected negation: "+tokens_string(tokens));
     }
     tokens.pop_front();
 
-    Negate neg;
-    neg.sub=expr_from_tokens(tokens);
-    return Expr(neg);
+    Negate* neg=new Negate();
+    neg->sub=expr_from_tokens(tokens);
+    return Expr(NodeRef(neg));
   }
 
   else{
@@ -344,4 +357,18 @@ Expr::Expr(string text){
   }
 }
 
-
+Expr::Expr(int64_t val){
+  if(val>=0){
+    Value* vl=new Value();
+    vl->mode=Value::INTEGER;
+    vl->integer=val;
+    root=NodeRef(vl);
+  }else{
+    Value* vl=new Value();
+    vl->mode=Value::INTEGER;
+    vl->integer=-val;
+    Negate* neg=new Negate();
+    neg->sub=Expr(NodeRef(vl));
+    root=NodeRef(neg);
+  }
+}

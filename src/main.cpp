@@ -8,12 +8,17 @@ using namespace std;
 
 int main(){
 
-  //test_all();
-  print(str_rep('a'));
-  print(str_rep("123"));
-  print(str_rep(123));
-  print(str_rep(std::string("123")));
-  print(str_rep((const char*)("123")));
+  test_all();
+
+  VAR(x);
+  VAR(y);
+
+  Expr add=x+y;
+  Expr mul=x*y;
+  Expr sub=x-y;
+  Expr div=x/y;
+  Expr pwr=x^y;
+  Expr neg=-x;
 
   return 0;
 }

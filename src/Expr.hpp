@@ -3,6 +3,7 @@
 #include <list>
 #include <memory>
 #include <cstring>
+#include <map>
 
 enum ValType{SCALAR,VECTOR,MATRIX};
 enum ExprType{
@@ -45,7 +46,7 @@ struct Expr{
     return root->as_text();
   }
   Expr duplicate() const{
-    return *this;
+    return Expr(*this);
   }
 
   bool is_null() const{
@@ -80,9 +81,11 @@ struct Expr{
   Expr(){}
   Expr(Expr&& b):root(std::move(b.root)){}
   Expr(const Expr& b):root(b.root->duplicate()){}
-  Expr(const NodeRef root):root(root->duplicate()){}
+  Expr(NodeRef&& root):root(std::move(root)){}
+  Expr(const NodeRef& root):root(root->duplicate()){}
   Expr(const Node& root):root(root.duplicate()){}
   Expr(std::string text);
+  Expr(int64_t val);
 
   void operator = (const Expr& b){
     root=b.root->duplicate();
@@ -95,9 +98,14 @@ struct Expr{
     return as_text();
   }
 
-  bool operator==(const Expr& b){
+  bool operator==(const Expr& b) const{
     return *root==*b.root;
   }
+  bool operator!=(const Expr& b) const{
+    return !(*root==*b.root);
+  }
+
+  Expr operator()(std::map<Expr,Expr> with) const;
 };
 
 
@@ -159,8 +167,11 @@ struct Power : Node{
 };
 
 struct Value : Node{
-  uint64_t integer;
-  enum Mode{INTEGER,PI,E} mode;
+  union{
+    uint64_t integer;
+    double real;
+  };
+  enum Mode{INTEGER,REAL,PI,E} mode;
   ExprType get_type() const{
     return VALUE;
   }
@@ -178,8 +189,12 @@ struct Variable : Node{
   std::string as_text() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
+  Variable(){}
+  Variable(std::string name):name(name){}
 };
 
+#define VAR(name)\
+Expr name(NodeRef(new Variable(#name)))
 
 
 
@@ -188,5 +203,39 @@ struct Variable : Node{
 
 
 
+#define EXPR_OP(op)\
+Expr operator op (Expr&& a,Expr&& b);\
+inline Expr operator op (const Expr& a,const Expr& b){\
+  return Expr(a) op Expr(b);\
+}\
+inline Expr operator op(const Expr& a,Expr&& b){\
+  return Expr(a) op std::move(b);\
+}\
+inline Expr operator op(Expr&& a,const Expr& b){\
+  return std::move(a) op Expr(b);\
+}
+
+EXPR_OP(+);
+EXPR_OP(-);
+EXPR_OP(*);
+EXPR_OP(/);
+
+#undef EXPR_OP
+
+Expr operator ^ (const Expr& a,const Expr& b);
+
+Expr operator - (     Expr&& a);
+inline Expr operator - (const Expr& a){
+  return -Expr(a);
+}
 
 
+Expr substitute(Expr&& ex,std::map<Expr,Expr> with);
+inline Expr substitute(const Expr& ex,std::map<Expr,Expr> with){
+  return substitute(Expr(ex),std::move(with));
+}
+
+Expr collapse(Expr&& ex);
+inline Expr collapse(const Expr& ex){
+  return collapse(Expr(ex));
+}

@@ -34,7 +34,9 @@ void test_##casename (){                                                        
 
 
 void test_expr_parse();
+void test_expr_ops();
 
 inline void test_all(){
   test_expr_parse();
+  test_expr_ops();
 }
