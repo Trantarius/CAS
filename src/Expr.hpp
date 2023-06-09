@@ -45,7 +45,7 @@ struct Expr{
   bool is_null() const{
     return root==nullptr;
   }
-/*
+
   template<typename T> T& as();
 
   #define ASFUNC(type,tval)                                                                 \
@@ -69,7 +69,7 @@ struct Expr{
   ASFUNC(Variable,VARIABLE);
 
   #undef ASFUNC
-  */
+
 
   Expr(){}
   Expr(Expr&& b):root(std::move(b.root)){}
