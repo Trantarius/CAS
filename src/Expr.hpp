@@ -5,7 +5,6 @@
 #include <cstring>
 #include <map>
 
-enum ValType{SCALAR,VECTOR,MATRIX};
 enum ExprType{
   SUM,NEGATE,PRODUCT,RECIPROCAL,POWER,VALUE,VARIABLE
 };
@@ -182,7 +181,6 @@ struct Value : Node{
 
 struct Variable : Node{
   std::string name;
-  ValType valtype=SCALAR;
   ExprType get_type() const{
     return VARIABLE;
   }
@@ -221,8 +219,6 @@ EXPR_OP(*);
 EXPR_OP(/);
 
 #undef EXPR_OP
-
-Expr operator ^ (const Expr& a,const Expr& b);
 
 Expr operator - (     Expr&& a);
 inline Expr operator - (const Expr& a){

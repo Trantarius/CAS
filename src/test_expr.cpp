@@ -25,20 +25,29 @@ TEST_CASE(expr_parse,
   ASSERT_EQ(acoff.as_text(),"a * b * 2 * d * x * 3");
 )
 
+
+#define EZ(ex) ASSERT_EQ(ex,Expr(#ex));
 TEST_CASE(expr_ops,
   VAR(x);
   VAR(y);
   VAR(z);
 
-  ASSERT_EQ(x+y+z,Expr("x+y+z"));
-  ASSERT_EQ(x*y*z,Expr("x*y*z"));
-  ASSERT_EQ(x-y-z,Expr("x-y-z"));
-  ASSERT_EQ(x/y/z,Expr("x/y/z"));
-  ASSERT_EQ(x^y^z,Expr("x^y^z"));
-  ASSERT_EQ(-x,Expr("-x"));
 
-  Expr quad=2*(x^2)+5*x+7;
-  ASSERT_EQ(quad,Expr("2*(x^2)+5*x+7"));
+  EZ(x+y+z);
+  EZ(x*y*z);
+  EZ(x-y-z);
+  EZ(x/y/z);
+  EZ(-x);
+  EZ((2*x)*(3*y)*(4*z));
 
-  ASSERT_EQ((2*x)*(3*y)*(4*z),Expr("(2*x)*(3*y)*(4*z)"));
+  EZ(x*y+z);
+  EZ(x+y*z);
+  EZ(x*y-z);
+  EZ(x*y/z);
+  EZ(x/y+z);
+  EZ(y+z/y);
+  EZ((x+y)/z);
+  EZ(-(x-y)/-z);
+  EZ(x- -y);
 )
+#undef EZ

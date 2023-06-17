@@ -256,7 +256,6 @@ string Variable::as_text() const{
 NodeRef Variable::duplicate() const{
   Variable* dupe=new Variable();
   dupe->name=name;
-  dupe->valtype=valtype;
   return NodeRef(dupe);
 }
 

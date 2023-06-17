@@ -7,10 +7,10 @@ using parse_error = Expr::parse_error;
 
 
 const map<char,uchar> operator_precedence{
-  {'^',0},//this matches c++ precedence
   {'+',1},
   {'*',2},
   {'/',3},
+  {'^',4},
   {'-',5},//only for negation, not subtraction
   {CHAR_MAX,UINT64_MAX}//fake
 };
@@ -94,7 +94,7 @@ list<Token> sub_to_add_negate(list<Token> tokens){
     if(it->type==Token::OPERATOR && it->oper=='-'){
       auto prev=--list<Token>::iterator(it);
       auto next=++list<Token>::iterator(it);
-      if(prev->type!=Token::OPERATOR && next->type!=Token::OPERATOR){
+      if(prev->type!=Token::OPERATOR){
         Token tok(Token::OPERATOR);
         tok.oper='+';
         tokens.insert(it,tok);
@@ -110,7 +110,7 @@ list<Token> div_to_mul_recip(list<Token> tokens){
     if(it->type==Token::OPERATOR && it->oper=='/'){
       auto prev=--list<Token>::iterator(it);
       auto next=++list<Token>::iterator(it);
-      if(prev->type!=Token::OPERATOR && next->type!=Token::OPERATOR){
+      if(prev->type!=Token::OPERATOR){
         Token tok(Token::OPERATOR);
         tok.oper='*';
         tokens.insert(it,tok);
@@ -327,7 +327,11 @@ Expr expr_from_tokens(list<Token> tokens){
     }
     tokens.pop_back();
 
-    return expr_from_tokens(tokens) ^ expr_from_tokens(exptok);
+    Power* pwr=new Power();
+    pwr->base=expr_from_tokens(tokens);
+    pwr->power=expr_from_tokens(exptok);
+
+    return Expr(NodeRef(pwr));
   }
 
   else if(highest_op=='-'){
