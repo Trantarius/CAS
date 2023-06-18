@@ -1,4 +1,5 @@
 #include "Expr.hpp"
+#include <misc.hpp>
 #include <list>
 
 using namespace std;
@@ -63,6 +64,36 @@ bool Sum::operator==(const Node& b) const{
   return true;
 }
 
+size_t Sum::hash() const{
+
+  size_t ret=0;
+  for(int n=0;n<64;n+=8){
+    ret^=SUM<<n;
+  }
+
+  int roll=0;
+  for(const Expr& e : sub){
+    size_t sh=Expr::hash(e);
+    sh=bitroll(sh,roll);
+    roll+=19;
+    ret^=sh;
+  }
+
+  return ret;
+}
+
+void Sum::recurse(function<Expr(Expr&&)> func){
+  for(auto it=sub.begin();it!=sub.end();it++){
+    (*it)=func(move(*it));
+    (*it).root->recurse(func);
+  }
+}
+
+
+
+
+
+
 
 string Product::as_text() const{
   string ret;
@@ -118,6 +149,35 @@ bool Product::operator==(const Node& b) const{
   return true;
 }
 
+size_t Product::hash() const{
+
+  size_t ret=0;
+  for(int n=0;n<64;n+=8){
+    ret^=PRODUCT<<n;
+  }
+
+  int roll=0;
+  for(const Expr& e : sub){
+    size_t sh=Expr::hash(e);
+    sh=bitroll(sh,roll);
+    roll+=19;
+    ret^=sh;
+  }
+
+  return ret;
+}
+
+void Product::recurse(function<Expr(Expr&&)> func){
+  for(auto it=sub.begin();it!=sub.end();it++){
+    (*it)=func(move(*it));
+    (*it).root->recurse(func);
+  }
+}
+
+
+
+
+
 
 string Reciprocal::as_text() const{
   switch(sub.get_type()){
@@ -147,6 +207,33 @@ bool Reciprocal::operator==(const Node& b) const{
   return sub==((Reciprocal&)b).sub;
 }
 
+size_t Reciprocal::hash() const{
+
+  size_t ret=0;
+  for(int n=0;n<64;n+=8){
+    ret^=RECIPROCAL<<n;
+  }
+
+  //making this invertible gives a hacky way of recognizing Reciprocal(Reciprocal(x))==x
+  ret^=Expr::hash(sub);
+
+  return ret;
+}
+
+void Reciprocal::recurse(function<Expr(Expr&&)> func){
+  sub=func(move(sub));
+  sub.root->recurse(func);
+}
+
+
+
+
+
+
+
+
+
+
 string Negate::as_text() const{
   switch(sub.get_type()){
 
@@ -174,6 +261,39 @@ bool Negate::operator==(const Node& b) const{
   }
   return sub==((Negate&)b).sub;
 }
+
+size_t Negate::hash() const{
+
+  size_t ret=0;
+  for(int n=0;n<64;n+=8){
+    ret^=NEGATE<<n;
+  }
+
+  //making this invertible gives a hacky way of recognizing Negate(Negate(x))==x
+  ret^=Expr::hash(sub);
+
+  return ret;
+}
+
+void Negate::recurse(function<Expr(Expr&&)> func){
+  sub=func(move(sub));
+  sub.root->recurse(func);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 string Power::as_text() const{
   string ret;
@@ -225,6 +345,41 @@ bool Power::operator==(const Node& b) const{
   return base==((Power&)b).base && power==((Power&)b).power;
 }
 
+size_t Power::hash() const{
+
+  size_t ret=0;
+  for(int n=0;n<64;n+=8){
+    ret^=POWER<<n;
+  }
+
+  ret^=bitroll(Expr::hash(base),13);
+  ret^=bitroll(Expr::hash(power),51);
+
+  return ret;
+}
+
+void Power::recurse(function<Expr(Expr&&)> func){
+  base=func(move(base));
+  base.root->recurse(func);
+
+  power=func(move(power));
+  power.root->recurse(func);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 string Value::as_text() const{
   if(mode==PI){
     return "pi";
@@ -249,6 +404,38 @@ bool Value::operator==(const Node& b) const{
   );
 }
 
+size_t Value::hash() const{
+
+  size_t ret=0;
+  for(int n=0;n<64;n+=8){
+    ret^=VALUE<<n;
+  }
+  ret=bitroll(ret,5);
+
+  for(int n=0;n<64;n+=8){
+    ret^=mode<<n;
+  }
+
+  if(mode==INTEGER || mode==REAL){
+    ret^=integer;
+  }
+
+  return ret;
+}
+
+void Value::recurse(function<Expr(Expr&&)> func){
+  //has no children, do nothing
+}
+
+
+
+
+
+
+
+
+
+
 string Variable::as_text() const{
   return name;
 }
@@ -261,4 +448,20 @@ NodeRef Variable::duplicate() const{
 
 bool Variable::operator==(const Node& b) const{
   return b.get_type()==VARIABLE && name==((Variable&)b).name;
+}
+
+size_t Variable::hash() const{
+
+  size_t ret=0;
+  for(int n=0;n<64;n+=8){
+    ret^=VARIABLE<<n;
+  }
+
+  ret^=std::hash<std::string>()(name);
+
+  return ret;
+}
+
+void Variable::recurse(function<Expr(Expr&&)> func){
+  //has no children, do nothing
 }

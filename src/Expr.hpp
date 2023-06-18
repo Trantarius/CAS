@@ -3,10 +3,11 @@
 #include <list>
 #include <memory>
 #include <cstring>
-#include <map>
+#include <unordered_map>
+#include <functional>
 
-enum ExprType{
-  SUM,NEGATE,PRODUCT,RECIPROCAL,POWER,VALUE,VARIABLE
+enum ExprType:char{
+  SUM='s',NEGATE='n',PRODUCT='p',RECIPROCAL='r',POWER='e',VALUE='l',VARIABLE='b'
 };
 
 
@@ -22,12 +23,25 @@ struct Power;
 struct Value;
 struct Variable;
 
-struct Node{
+class Node{
+  virtual void recurse(std::function<Expr(Expr&&)> func)=0;
 
+public:
   virtual ExprType get_type() const=0;
   virtual std::string as_text() const=0;
   virtual NodeRef duplicate() const=0;
   virtual bool operator==(const Node& b) const=0;
+  virtual size_t hash() const=0;
+
+  friend class Expr;
+  friend struct Sum;
+  friend struct Product;
+  friend struct Reciprocal;
+  friend struct Negate;
+  friend struct Power;
+  friend struct Value;
+  friend struct Variable;
+  friend Expr expr_recurse(Expr&&,std::function<Expr(Expr&&)>);
 };
 
 struct Expr{
@@ -104,8 +118,21 @@ struct Expr{
     return !(*root==*b.root);
   }
 
-  Expr operator()(std::map<Expr,Expr> with) const;
+  static size_t hash(const Expr& ex){
+    return ex.root->hash();
+  }
+  struct Hash{
+    size_t operator()(const Expr& ex) const{
+      return Expr::hash(ex);
+    }
+  };
+
+
+  Expr operator()(std::unordered_map<Expr,Expr,Expr::Hash> with) const;
 };
+
+
+using ExprMap=std::unordered_map<Expr,Expr,Expr::Hash>;
 
 
 struct Sum : Node{
@@ -119,6 +146,10 @@ struct Sum : Node{
   std::string as_text() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
+
+  size_t hash() const;
+private:
+  void recurse(std::function<Expr(Expr&&)> func);
 };
 
 struct Product : Node{
@@ -132,6 +163,9 @@ struct Product : Node{
   std::string as_text() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
+  size_t hash() const;
+private:
+  void recurse(std::function<Expr(Expr&&)> func);
 };
 
 struct Reciprocal : Node{
@@ -142,6 +176,9 @@ struct Reciprocal : Node{
   std::string as_text() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
+  size_t hash() const;
+private:
+  void recurse(std::function<Expr(Expr&&)> func);
 };
 
 struct Negate : Node{
@@ -152,6 +189,9 @@ struct Negate : Node{
   std::string as_text() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
+  size_t hash() const;
+private:
+  void recurse(std::function<Expr(Expr&&)> func);
 };
 
 struct Power : Node{
@@ -163,6 +203,9 @@ struct Power : Node{
   std::string as_text() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
+  size_t hash() const;
+private:
+  void recurse(std::function<Expr(Expr&&)> func);
 };
 
 struct Value : Node{
@@ -170,13 +213,16 @@ struct Value : Node{
     uint64_t integer;
     double real;
   };
-  enum Mode{INTEGER,REAL,PI,E} mode;
+  enum Mode:uint8_t{INTEGER='I',REAL='R',PI='P',E='E'} mode;
   ExprType get_type() const{
     return VALUE;
   }
   std::string as_text() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
+  size_t hash() const;
+private:
+  void recurse(std::function<Expr(Expr&&)> func);
 };
 
 struct Variable : Node{
@@ -189,6 +235,9 @@ struct Variable : Node{
   bool operator==(const Node& b) const;
   Variable(){}
   Variable(std::string name):name(name){}
+  size_t hash() const;
+private:
+  void recurse(std::function<Expr(Expr&&)> func);
 };
 
 #define VAR(name)\
@@ -226,8 +275,13 @@ inline Expr operator - (const Expr& a){
 }
 
 
-Expr substitute(Expr&& ex,std::map<Expr,Expr> with);
-inline Expr substitute(const Expr& ex,std::map<Expr,Expr> with){
+
+
+
+Expr expr_recurse(Expr&& ex,std::function<Expr(Expr&&)> func);
+
+Expr substitute(Expr&& ex,ExprMap with);
+inline Expr substitute(const Expr& ex,ExprMap with){
   return substitute(Expr(ex),std::move(with));
 }
 
@@ -235,3 +289,4 @@ Expr collapse(Expr&& ex);
 inline Expr collapse(const Expr& ex){
   return collapse(Expr(ex));
 }
+

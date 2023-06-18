@@ -18,10 +18,10 @@ if(!(cond)){                                                                    
   throw failed_test(#cond " is false at " __FILE__ ":" + util::tostr(__LINE__));     \
 }
 
-#define TEST_CASE(casename,test)                                                        \
+#define TEST_CASE(casename,...)                                                        \
 void test_##casename (){                                                                \
   try{                                                                              \
-    test                                                                            \
+    __VA_ARGS__                                                                          \
   }                                                                                 \
   catch(failed_test& ft){                                                           \
     throw ft;                                                                       \
@@ -35,8 +35,10 @@ void test_##casename (){                                                        
 
 void test_expr_parse();
 void test_expr_ops();
+void test_expr_substitute();
 
 inline void test_all(){
   test_expr_parse();
   test_expr_ops();
+  test_expr_substitute();
 }

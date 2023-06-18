@@ -51,3 +51,21 @@ TEST_CASE(expr_ops,
   EZ(x- -y);
 )
 #undef EZ
+
+
+TEST_CASE(expr_substitute,
+  VAR(x);
+  VAR(y);
+  VAR(z);
+
+  VAR(a);
+  VAR(b);
+  VAR(c);
+
+  ExprMap map{{x,a},{y,b},{z,c}};
+
+  ASSERT_EQ(substitute(x+y+z,map),a+b+c);
+  ASSERT_EQ(substitute(x*y/z,map),a*b/c);
+  ASSERT_EQ(substitute(a*x*y,map),a*a*b);
+  ASSERT_EQ(substitute((x*2)+(y*4+(z*8)),map),(a*2)+(b*4+(c*8)));
+)
