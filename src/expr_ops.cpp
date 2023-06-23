@@ -79,3 +79,7 @@ Expr operator - (Expr&& a){
   neg->sub=move(a);
   return Expr(NodeRef(neg));
 }
+
+Expr Expr::operator()(ExprMap with) const{
+  return substitute(Expr(*this),with);
+}

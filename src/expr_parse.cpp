@@ -4,14 +4,15 @@
 using namespace std;
 using namespace util;
 using parse_error = Expr::parse_error;
+using Token = Expr::Token;
 
 
 const map<char,uchar> operator_precedence{
   {'+',1},
   {'*',2},
-  {'/',3},
-  {'^',4},
-  {'-',5},//only for negation, not subtraction
+  {'^',3},
+  {'/',4},//only for reciprocal, not division
+  {'-',4},//only for negation, not subtraction
   {CHAR_MAX,UINT64_MAX}//fake
 };
 
@@ -53,29 +54,7 @@ size_t skip_paren(string text,size_t start){
   return idx;
 }
 
-struct Token{
-  const enum Type{NUMBER,NAME,OPERATOR,PARENTHESES} type;
-  uint64_t number;
-  string name;
-  char oper;
-  list<Token> subtokens;
 
-  Token(Type type):type(type){}
-
-  operator string(){
-    switch(type){
-      case NUMBER: return tostr(number);
-      case NAME: return name;
-      case OPERATOR: return string(&oper,1);
-      case PARENTHESES:
-        string ret="( ";
-        for(Token token : subtokens){
-          ret+=(string)token;
-        }
-        return ret+")";
-    }
-  }
-};
 
 
 
@@ -306,18 +285,6 @@ Expr expr_from_tokens(list<Token> tokens){
     return prod;
   }
 
-  else if(highest_op=='/'){
-    Token start=*tokens.begin();
-    if(start.type!=Token::OPERATOR || start.oper!='/'){
-      throw parse_error("expected reciprocal: "+tokens_string(tokens));
-    }
-    tokens.pop_front();
-
-    Reciprocal* rec=new Reciprocal();
-    rec->sub=expr_from_tokens(tokens);
-    return Expr(NodeRef(rec));
-  }
-
   else if(highest_op=='^'){
 
     list<Token> exptok;
@@ -332,6 +299,19 @@ Expr expr_from_tokens(list<Token> tokens){
     pwr->power=expr_from_tokens(exptok);
 
     return Expr(NodeRef(pwr));
+  }
+
+  else if(highest_op=='/'){
+
+    Token start=*tokens.begin();
+    if(start.type!=Token::OPERATOR || start.oper!='/'){
+      throw parse_error("expected reciprocal: "+tokens_string(tokens));
+    }
+    tokens.pop_front();
+
+    Reciprocal* rec=new Reciprocal();
+    rec->sub=expr_from_tokens(tokens);
+    return Expr(NodeRef(rec));
   }
 
   else if(highest_op=='-'){

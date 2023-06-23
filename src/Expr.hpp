@@ -50,6 +50,30 @@ struct Expr{
     parse_error(std::string msg):std::logic_error(msg){}
   };
 
+  struct Token{
+    const enum Type{NUMBER,NAME,OPERATOR,PARENTHESES} type;
+    uint64_t number;
+    std::string name;
+    char oper;
+    std::list<Token> subtokens;
+
+    Token(Type type):type(type){}
+
+    operator std::string(){
+      switch(type){
+        case NUMBER: return util::tostr(number);
+        case NAME: return name;
+        case OPERATOR: return std::string(&oper,1);
+        case PARENTHESES:
+          std::string ret="( ";
+          for(Token token : subtokens){
+            ret+=(std::string)token;
+          }
+          return ret+")";
+      }
+    }
+  };
+
   NodeRef root=nullptr;
 
   ExprType get_type() const{
@@ -129,125 +153,19 @@ struct Expr{
 
 
   Expr operator()(std::unordered_map<Expr,Expr,Expr::Hash> with) const;
+
+  template<typename T> requires std::is_arithmetic<T>::value
+  double operator()(T num) const;
 };
 
 
 using ExprMap=std::unordered_map<Expr,Expr,Expr::Hash>;
 
 
-struct Sum : Node{
-
-  std::list<Expr> sub;
-
-  ExprType get_type() const{
-    return SUM;
-  }
-
-  std::string as_text() const;
-  NodeRef duplicate() const;
-  bool operator==(const Node& b) const;
-
-  size_t hash() const;
-private:
-  void recurse(std::function<Expr(Expr&&)> func);
-};
-
-struct Product : Node{
-
-  std::list<Expr> sub;
-
-  ExprType get_type() const{
-    return PRODUCT;
-  }
-
-  std::string as_text() const;
-  NodeRef duplicate() const;
-  bool operator==(const Node& b) const;
-  size_t hash() const;
-private:
-  void recurse(std::function<Expr(Expr&&)> func);
-};
-
-struct Reciprocal : Node{
-  Expr sub;
-  ExprType get_type() const{
-    return RECIPROCAL;
-  }
-  std::string as_text() const;
-  NodeRef duplicate() const;
-  bool operator==(const Node& b) const;
-  size_t hash() const;
-private:
-  void recurse(std::function<Expr(Expr&&)> func);
-};
-
-struct Negate : Node{
-  Expr sub;
-  ExprType get_type() const{
-    return NEGATE;
-  }
-  std::string as_text() const;
-  NodeRef duplicate() const;
-  bool operator==(const Node& b) const;
-  size_t hash() const;
-private:
-  void recurse(std::function<Expr(Expr&&)> func);
-};
-
-struct Power : Node{
-  Expr base;
-  Expr power;
-  ExprType get_type() const{
-    return POWER;
-  }
-  std::string as_text() const;
-  NodeRef duplicate() const;
-  bool operator==(const Node& b) const;
-  size_t hash() const;
-private:
-  void recurse(std::function<Expr(Expr&&)> func);
-};
-
-struct Value : Node{
-  union{
-    uint64_t integer;
-    double real;
-  };
-  enum Mode:uint8_t{INTEGER='I',REAL='R',PI='P',E='E'} mode;
-  ExprType get_type() const{
-    return VALUE;
-  }
-  std::string as_text() const;
-  NodeRef duplicate() const;
-  bool operator==(const Node& b) const;
-  size_t hash() const;
-private:
-  void recurse(std::function<Expr(Expr&&)> func);
-};
-
-struct Variable : Node{
-  std::string name;
-  ExprType get_type() const{
-    return VARIABLE;
-  }
-  std::string as_text() const;
-  NodeRef duplicate() const;
-  bool operator==(const Node& b) const;
-  Variable(){}
-  Variable(std::string name):name(name){}
-  size_t hash() const;
-private:
-  void recurse(std::function<Expr(Expr&&)> func);
-};
+#include "ExprNodes.hpp"
 
 #define VAR(name)\
 Expr name(NodeRef(new Variable(#name)))
-
-
-
-
-
-
 
 
 #define EXPR_OP(op)\
@@ -284,9 +202,12 @@ Expr substitute(Expr&& ex,ExprMap with);
 inline Expr substitute(const Expr& ex,ExprMap with){
   return substitute(Expr(ex),std::move(with));
 }
+inline Expr substitute(const Expr& ex,const Expr& what,const Expr& with){
+  return substitute(Expr(ex),ExprMap{{what,with}});
+}
 
-Expr collapse(Expr&& ex);
-inline Expr collapse(const Expr& ex){
-  return collapse(Expr(ex));
+Expr reduce(Expr&& ex);
+inline Expr reduce(const Expr& ex){
+  return reduce(Expr(ex));
 }
 
