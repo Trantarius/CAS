@@ -29,12 +29,7 @@ class Expr{
         case NUMBER: return util::tostr(number);
         case NAME: return name;
         case OPERATOR: return std::string(&oper,1);
-        case PARENTHESES:
-          std::string ret="( ";
-          for(Token token : subtokens){
-            ret+=(std::string)token;
-          }
-          return ret+")";
+        case PARENTHESES: return "("+tokens_to_string(subtokens)+")";
       }
     }
   };
@@ -73,7 +68,7 @@ public:
   }
 
   std::string as_text() const{
-    return tokens_to_string(root->to_tokens());
+    return tokens_to_string(expr_to_tokens(*this));
   }
 private:
   template<typename T> T& as();
@@ -129,7 +124,7 @@ public:
   }
 
   operator std::string() const{
-    return tokens_to_string(root->to_tokens());
+    return as_text();
   }
 
   bool operator==(const Expr& b) const{

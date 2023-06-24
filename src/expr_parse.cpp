@@ -175,9 +175,9 @@ list<Expr::Token> Expr::string_to_tokens(string text,size_t start,size_t end){
 string Expr::tokens_to_string(list<Token> tokens){
   string str;
   for(Token token : tokens){
-    str+=(string)token+" ";
+    str+=(string)token;
   }
-  return str.substr(0,str.size()-1);
+  return str;
 }
 
 list<list<Expr::Token>> Expr::split_tokens(list<Token> tokens,char oper){
@@ -317,6 +317,44 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
   else{
     throw parse_error("unparseable tokens: "+tokens_to_string(tokens));
   }
+}
+
+list<Expr::Token> Expr::expr_to_tokens(const Expr& ex){
+  list<Token> tokens=ex.root->to_tokens();
+
+  //convert '5*n' to '5n'
+  for(auto it=++tokens.begin();it!=--tokens.end();it++){
+    auto next=it;
+    next++;
+    auto prev=it;
+    prev--;
+    if(it->type==Token::OPERATOR && it->oper=='*' && next->type==Token::NAME && prev->type==Token::NUMBER){
+      it=--tokens.erase(it);
+    }
+  }
+
+
+  //convert 'a+-b' to 'a-b'
+  for(auto it=tokens.begin();it!=--tokens.end();it++){
+    if(it->type==Token::OPERATOR && it->oper=='+'){
+      auto next=++list<Token>::iterator(it);
+      if( next->type==Token::OPERATOR && next->oper=='-'){
+        it=--tokens.erase(it);
+      }
+    }
+  }
+
+  //convert 'a*/b' to 'a/b'
+  for(auto it=tokens.begin();it!=--tokens.end();it++){
+    if(it->type==Token::OPERATOR && it->oper=='*'){
+      auto next=++list<Token>::iterator(it);
+      if(next->type==Token::OPERATOR && next->oper=='/'){
+        it=--tokens.erase(it);
+      }
+    }
+  }
+
+  return tokens;
 }
 
 Expr::Expr(string text){
