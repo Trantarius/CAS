@@ -21,7 +21,7 @@ bool is_name_char(char c){
 }
 
 bool is_num_char(char c){
-  return c>='0' && c<='9';
+  return c>='0' && c<='9' || c=='.';
 }
 
 bool is_op_char(char c){
@@ -102,7 +102,7 @@ list<Expr::Token> Expr::string_to_tokens(string text,size_t start,size_t end){
         num+=text[idx++];
       }
       Token tok(Token::NUMBER);
-      tok.number=stoull(num);
+      tok.number.set_str(num,10);
       tokens.push_back(tok);
     }
 
@@ -173,6 +173,38 @@ list<Expr::Token> Expr::string_to_tokens(string text,size_t start,size_t end){
 }
 
 string Expr::tokens_to_string(list<Token> tokens){
+
+  //convert '5*n' to '5n'
+  for(auto it=++tokens.begin();it!=--tokens.end();it++){
+    auto next=it;
+    next++;
+    auto prev=it;
+    prev--;
+    if(it->type==Token::OPERATOR && it->oper=='*' && next->type==Token::NAME && prev->type==Token::NUMBER){
+      it=--tokens.erase(it);
+    }
+  }
+
+  //convert 'a+-b' to 'a-b'
+  for(auto it=tokens.begin();it!=--tokens.end();it++){
+    if(it->type==Token::OPERATOR && it->oper=='+'){
+      auto next=++list<Token>::iterator(it);
+      if( next->type==Token::OPERATOR && next->oper=='-'){
+        it=--tokens.erase(it);
+      }
+    }
+  }
+
+  //convert 'a*/b' to 'a/b'
+  for(auto it=tokens.begin();it!=--tokens.end();it++){
+    if(it->type==Token::OPERATOR && it->oper=='*'){
+      auto next=++list<Token>::iterator(it);
+      if(next->type==Token::OPERATOR && next->oper=='/'){
+        it=--tokens.erase(it);
+      }
+    }
+  }
+
   string str;
   for(Token token : tokens){
     str+=(string)token;
@@ -234,8 +266,8 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
     }
     else if(token.type==Token::NUMBER){
       Value val;
-      val.mode=Value::INTEGER;
-      val.integer=token.number;
+      val.mode=Value::NUMBER;
+      val.number=token.number;
       return Expr(val);
     }
     else if(token.type==Token::PARENTHESES){
@@ -322,38 +354,6 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
 list<Expr::Token> Expr::expr_to_tokens(const Expr& ex){
   list<Token> tokens=ex.root->to_tokens();
 
-  //convert '5*n' to '5n'
-  for(auto it=++tokens.begin();it!=--tokens.end();it++){
-    auto next=it;
-    next++;
-    auto prev=it;
-    prev--;
-    if(it->type==Token::OPERATOR && it->oper=='*' && next->type==Token::NAME && prev->type==Token::NUMBER){
-      it=--tokens.erase(it);
-    }
-  }
-
-
-  //convert 'a+-b' to 'a-b'
-  for(auto it=tokens.begin();it!=--tokens.end();it++){
-    if(it->type==Token::OPERATOR && it->oper=='+'){
-      auto next=++list<Token>::iterator(it);
-      if( next->type==Token::OPERATOR && next->oper=='-'){
-        it=--tokens.erase(it);
-      }
-    }
-  }
-
-  //convert 'a*/b' to 'a/b'
-  for(auto it=tokens.begin();it!=--tokens.end();it++){
-    if(it->type==Token::OPERATOR && it->oper=='*'){
-      auto next=++list<Token>::iterator(it);
-      if(next->type==Token::OPERATOR && next->oper=='/'){
-        it=--tokens.erase(it);
-      }
-    }
-  }
-
   return tokens;
 }
 
@@ -366,18 +366,9 @@ Expr::Expr(string text){
   }
 }
 
-Expr::Expr(int64_t val){
-  if(val>=0){
-    Value* vl=new Value();
-    vl->mode=Value::INTEGER;
-    vl->integer=val;
-    root=NodeRef(vl);
-  }else{
-    Value* vl=new Value();
-    vl->mode=Value::INTEGER;
-    vl->integer=-val;
-    Negate* neg=new Negate();
-    neg->sub=Expr(NodeRef(vl));
-    root=NodeRef(neg);
-  }
+Expr::Expr(Number val){
+  Value* vl=new Value();
+  vl->mode=Value::NUMBER;
+  vl->number=val;
+  root=NodeRef(vl);
 }

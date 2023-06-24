@@ -441,15 +441,9 @@ list<Expr::Token> Expr::Value::to_tokens() const{
     list<Token> ret;
     ret.push_back(tok);
     return ret;
-  }else if(mode==INTEGER){
-    Token tok(Token::NUMBER);
-    tok.number=integer;
-    list<Token> ret;
-    ret.push_back(tok);
-    return ret;
   }else{
     Token tok(Token::NUMBER);
-    tok.number=real;
+    tok.number=number;
     list<Token> ret;
     ret.push_back(tok);
     return ret;
@@ -459,14 +453,14 @@ list<Expr::Token> Expr::Value::to_tokens() const{
 Expr::NodeRef Expr::Value::duplicate() const{
   Value* dupe=new Value();
   dupe->mode=mode;
-  dupe->integer=integer;
+  dupe->number=number;
   return NodeRef(dupe);
 }
 
 bool Expr::Value::operator==(const Node& b) const{
   return b.get_type()==VALUE && ((Value&)b).mode==mode && (
-    mode==INTEGER && integer==((Value&)b).integer ||
-    mode!=INTEGER
+    mode==NUMBER && number==((Value&)b).number ||
+    mode!=NUMBER
   );
 }
 
@@ -482,8 +476,10 @@ size_t Expr::Value::hash() const{
     ret^=mode<<n;
   }
 
-  if(mode==INTEGER || mode==REAL){
-    ret^=integer;
+  if(mode==NUMBER){
+    double n=number.get_d();
+    int64_t i=*(int64_t*)&n;
+    ret^=i;
   }
 
   return ret;

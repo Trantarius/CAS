@@ -5,6 +5,7 @@
 #include <cstring>
 #include <unordered_map>
 #include <functional>
+#include "Number.hpp"
 
 class Expr{
 
@@ -17,7 +18,7 @@ class Expr{
 
   struct Token{
     enum Type{NUMBER,NAME,OPERATOR,PARENTHESES} type;
-    uint64_t number;
+    Number number;
     std::string name;
     char oper;
     std::list<Token> subtokens;
@@ -26,7 +27,7 @@ class Expr{
 
     operator std::string(){
       switch(type){
-        case NUMBER: return util::tostr(number);
+        case NUMBER: return mpf_to_string(number);
         case NAME: return name;
         case OPERATOR: return std::string(&oper,1);
         case PARENTHESES: return "("+tokens_to_string(subtokens)+")";
@@ -109,7 +110,9 @@ public:
   Expr(Expr&& b):root(std::move(b.root)){}
   Expr(const Expr& b):root(b.root->duplicate()){}
   Expr(std::string text);
-  Expr(int64_t val);
+  Expr(Number val);
+  template<typename T> requires std::is_arithmetic<T>::value
+  Expr(T val):Expr(Number(val)){}
 
 
 

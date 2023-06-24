@@ -9,12 +9,11 @@ int main(){
 
   test_all();
 
-  Expr orig("5x+y/(z+1)");
+  Expr orig("54364573452342364634x+y/(z+01)");
 
-  Expr modified=substitute(orig,{{Expr("5x"),Expr("a")},{Expr("z+1"),Expr("b")}});
+  Expr modified=substitute(orig,{{Expr("5x"),Expr("2.5a")},{Expr("z+1"),Expr("pi b")}});
   print(orig);
   print(modified);
-
 
   return 0;
 }

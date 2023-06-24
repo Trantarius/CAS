@@ -9,7 +9,6 @@ struct Expr::Sum : Expr::Node{
     return SUM;
   }
 
-  //std::string as_text() const;
   std::list<Token> to_tokens() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
@@ -27,7 +26,6 @@ struct Expr::Product : Expr::Node{
     return PRODUCT;
   }
 
-  //std::string as_text() const;
   std::list<Token> to_tokens() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
@@ -41,7 +39,6 @@ struct Expr::Reciprocal : Expr::Node{
   Type get_type() const{
     return RECIPROCAL;
   }
-  //std::string as_text() const;
   std::list<Token> to_tokens() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
@@ -55,7 +52,6 @@ struct Expr::Negate : Expr::Node{
   Type get_type() const{
     return NEGATE;
   }
-  //std::string as_text() const;
   std::list<Token> to_tokens() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
@@ -70,7 +66,6 @@ struct Expr::Power : Expr::Node{
   Type get_type() const{
     return POWER;
   }
-  //std::string as_text() const;
   std::list<Token> to_tokens() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
@@ -80,15 +75,11 @@ private:
 };
 
 struct Expr::Value : Expr::Node{
-  union{
-    uint64_t integer;
-    double real;
-  };
-  enum Mode:uint8_t{INTEGER='I',REAL='R',PI='P',E='E'} mode;
+  Number number;
+  enum Mode:uint8_t{NUMBER='N',PI='P',E='E'} mode;
   Type get_type() const{
     return VALUE;
   }
-  //std::string as_text() const;
   std::list<Token> to_tokens() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
@@ -102,7 +93,6 @@ struct Expr::Variable : Expr::Node{
   Type get_type() const{
     return VARIABLE;
   }
-  //std::string as_text() const;
   std::list<Token> to_tokens() const;
   NodeRef duplicate() const;
   bool operator==(const Node& b) const;
