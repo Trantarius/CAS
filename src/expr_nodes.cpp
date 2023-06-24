@@ -10,17 +10,23 @@ string parenthesis(string in){
   return "("+in+")";
 }
 
-string Sum::as_text() const{
-  string ret;
+list<Expr::Token> Expr::Sum::to_tokens() const{
+  list<Token> ret;
   for(auto it=sub.begin();it!=sub.end();it++){
     if(it!=sub.begin()){
-      ret+=" + ";
+      Token tok(Token::OPERATOR);
+      tok.oper='+';
+      ret.push_back(tok);
     }
 
-    switch(it->get_type()){
+    list<Token> toks=it->root->to_tokens();
+    Token paren(Token::PARENTHESES);
+    paren.subtokens=toks;
+
+    switch(it->root->get_type()){
 
       case SUM:
-        ret+=parenthesis(it->as_text());
+        ret.push_back(paren);
         break;
       case NEGATE:
       case PRODUCT:
@@ -28,21 +34,21 @@ string Sum::as_text() const{
       case POWER:
       case VALUE:
       case VARIABLE:
-        ret+=(it->as_text());
+        ret.splice(ret.end(),toks);
     }
   }
   return ret;
 }
 
-NodeRef Sum::duplicate() const{
+Expr::NodeRef Expr::Sum::duplicate() const{
   Sum* dupe=new Sum();
   for(auto it=sub.begin();it!=sub.end();it++){
-    dupe->sub.push_back(it->duplicate());
+    dupe->sub.push_back(Expr(*it));
   }
   return NodeRef(dupe);
 }
 
-bool Sum::operator==(const Node& b) const{
+bool Expr::Sum::operator==(const Node& b) const{
   if(b.get_type()!=SUM){
     return false;
   }
@@ -64,7 +70,7 @@ bool Sum::operator==(const Node& b) const{
   return true;
 }
 
-size_t Sum::hash() const{
+size_t Expr::Sum::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
@@ -82,7 +88,7 @@ size_t Sum::hash() const{
   return ret;
 }
 
-void Sum::recurse(function<Expr(Expr&&)> func){
+void Expr::Sum::recurse(function<Expr(Expr&&)> func){
   for(auto it=sub.begin();it!=sub.end();it++){
     (*it)=func(move(*it));
     (*it).root->recurse(func);
@@ -95,39 +101,45 @@ void Sum::recurse(function<Expr(Expr&&)> func){
 
 
 
-string Product::as_text() const{
-  string ret;
+list<Expr::Token> Expr::Product::to_tokens() const{
+  list<Token> ret;
   for(auto it=sub.begin();it!=sub.end();it++){
     if(it!=sub.begin()){
-      ret+=" * ";
+      Token tok(Token::OPERATOR);
+      tok.oper='*';
+      ret.push_back(tok);
     }
 
-    switch(it->get_type()){
+    list<Token> toks=it->root->to_tokens();
+    Token paren(Token::PARENTHESES);
+    paren.subtokens=toks;
+
+    switch(it->root->get_type()){
 
       case SUM:
       case PRODUCT:
-      case RECIPROCAL:
-      case POWER:
-        ret+=parenthesis(it->as_text());
+        ret.push_back(paren);
         break;
       case NEGATE:
+      case RECIPROCAL:
+      case POWER:
       case VALUE:
       case VARIABLE:
-        ret+=(it->as_text());
+        ret.splice(ret.end(),toks);
     }
   }
   return ret;
 }
 
-NodeRef Product::duplicate() const{
+Expr::NodeRef Expr::Product::duplicate() const{
   Product* dupe=new Product();
   for(auto it=sub.begin();it!=sub.end();it++){
-    dupe->sub.push_back(it->duplicate());
+    dupe->sub.push_back(Expr(*it));
   }
   return NodeRef(dupe);
 }
 
-bool Product::operator==(const Node& b) const{
+bool Expr::Product::operator==(const Node& b) const{
   if(b.get_type()!=PRODUCT){
     return false;
   }
@@ -149,7 +161,7 @@ bool Product::operator==(const Node& b) const{
   return true;
 }
 
-size_t Product::hash() const{
+size_t Expr::Product::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
@@ -167,7 +179,7 @@ size_t Product::hash() const{
   return ret;
 }
 
-void Product::recurse(function<Expr(Expr&&)> func){
+void Expr::Product::recurse(function<Expr(Expr&&)> func){
   for(auto it=sub.begin();it!=sub.end();it++){
     (*it)=func(move(*it));
     (*it).root->recurse(func);
@@ -179,35 +191,48 @@ void Product::recurse(function<Expr(Expr&&)> func){
 
 
 
-string Reciprocal::as_text() const{
-  switch(sub.get_type()){
+list<Expr::Token> Expr::Reciprocal::to_tokens() const{
+
+  list<Token> toks=sub.root->to_tokens();
+  Token paren(Token::PARENTHESES);
+  paren.subtokens=toks;
+
+  Token op(Token::OPERATOR);
+  op.oper='/';
+  list<Token> ret;
+  ret.push_front(op);
+
+
+  switch(sub.root->get_type()){
 
     case SUM:
     case PRODUCT:
     case RECIPROCAL:
     case POWER:
-      return "1/"+parenthesis(sub.as_text());
+      ret.push_back(paren);
+      return ret;
     case NEGATE:
     case VALUE:
     case VARIABLE:
-      return "1/"+(sub.as_text());
+      ret.splice(ret.end(),toks);
+      return ret;
   }
 }
 
-NodeRef Reciprocal::duplicate() const{
+Expr::NodeRef Expr::Reciprocal::duplicate() const{
   Reciprocal* dupe=new Reciprocal();
-  dupe->sub=sub.duplicate();
+  dupe->sub=sub;
   return NodeRef(dupe);
 }
 
-bool Reciprocal::operator==(const Node& b) const{
+bool Expr::Reciprocal::operator==(const Node& b) const{
   if(b.get_type()!=RECIPROCAL){
     return false;
   }
   return sub==((Reciprocal&)b).sub;
 }
 
-size_t Reciprocal::hash() const{
+size_t Expr::Reciprocal::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
@@ -220,7 +245,7 @@ size_t Reciprocal::hash() const{
   return ret;
 }
 
-void Reciprocal::recurse(function<Expr(Expr&&)> func){
+void Expr::Reciprocal::recurse(function<Expr(Expr&&)> func){
   sub=func(move(sub));
   sub.root->recurse(func);
 }
@@ -234,35 +259,48 @@ void Reciprocal::recurse(function<Expr(Expr&&)> func){
 
 
 
-string Negate::as_text() const{
-  switch(sub.get_type()){
+list<Expr::Token> Expr::Negate::to_tokens() const{
+
+  list<Token> toks=sub.root->to_tokens();
+  Token paren(Token::PARENTHESES);
+  paren.subtokens=toks;
+
+  Token op(Token::OPERATOR);
+  op.oper='-';
+  list<Token> ret;
+  ret.push_front(op);
+
+
+  switch(sub.root->get_type()){
 
     case SUM:
     case PRODUCT:
     case RECIPROCAL:
     case POWER:
-      return "-"+parenthesis(sub.as_text());
+      ret.push_back(paren);
+      return ret;
     case NEGATE:
     case VALUE:
     case VARIABLE:
-      return "-"+(sub.as_text());
+      ret.splice(ret.end(),toks);
+      return ret;
   }
 }
 
-NodeRef Negate::duplicate() const{
+Expr::NodeRef Expr::Negate::duplicate() const{
   Negate* dupe=new Negate();
-  dupe->sub=sub.duplicate();
+  dupe->sub=sub;
   return NodeRef(dupe);
 }
 
-bool Negate::operator==(const Node& b) const{
+bool Expr::Negate::operator==(const Node& b) const{
   if(b.get_type()!=NEGATE){
     return false;
   }
   return sub==((Negate&)b).sub;
 }
 
-size_t Negate::hash() const{
+size_t Expr::Negate::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
@@ -275,7 +313,7 @@ size_t Negate::hash() const{
   return ret;
 }
 
-void Negate::recurse(function<Expr(Expr&&)> func){
+void Expr::Negate::recurse(function<Expr(Expr&&)> func){
   sub=func(move(sub));
   sub.root->recurse(func);
 }
@@ -293,59 +331,70 @@ void Negate::recurse(function<Expr(Expr&&)> func){
 
 
 
+list<Expr::Token> Expr::Power::to_tokens() const{
+
+  list<Token> toks=base.root->to_tokens();
+  Token paren(Token::PARENTHESES);
+  paren.subtokens=toks;
+
+  list<Token> ret;
 
 
-string Power::as_text() const{
-  string ret;
-
-  switch(base.get_type()){
+  switch(base.root->get_type()){
 
     case SUM:
     case PRODUCT:
     case RECIPROCAL:
     case POWER:
     case NEGATE:
-      ret+=parenthesis(base.as_text());
+      ret.push_back(paren);
       break;
     case VALUE:
     case VARIABLE:
-      ret+= (base.as_text());
+      ret.splice(ret.end(),toks);
+      break;
   }
 
-  ret+="^";
+  Token op(Token::OPERATOR);
+  op.oper='^';
+  ret.push_back(op);
 
-  switch(power.get_type()){
+  toks=power.root->to_tokens();
+  paren.subtokens=toks;
+
+  switch(power.root->get_type()){
 
     case SUM:
     case PRODUCT:
     case RECIPROCAL:
     case POWER:
     case NEGATE:
-      ret+=parenthesis(power.as_text());
+      ret.push_back(paren);
       break;
     case VALUE:
     case VARIABLE:
-      ret+= (power.as_text());
+      ret.splice(ret.end(),toks);
+      break;
   }
 
   return ret;
 }
 
-NodeRef Power::duplicate() const{
+Expr::NodeRef Expr::Power::duplicate() const{
   Power* dupe=new Power();
-  dupe->base=base.duplicate();
-  dupe->power=power.duplicate();
+  dupe->base=base;
+  dupe->power=power;
   return NodeRef(dupe);
 }
 
-bool Power::operator==(const Node& b) const{
+bool Expr::Power::operator==(const Node& b) const{
   if(b.get_type()!=POWER){
     return false;
   }
   return base==((Power&)b).base && power==((Power&)b).power;
 }
 
-size_t Power::hash() const{
+size_t Expr::Power::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
@@ -358,7 +407,7 @@ size_t Power::hash() const{
   return ret;
 }
 
-void Power::recurse(function<Expr(Expr&&)> func){
+void Expr::Power::recurse(function<Expr(Expr&&)> func){
   base=func(move(base));
   base.root->recurse(func);
 
@@ -379,32 +428,49 @@ void Power::recurse(function<Expr(Expr&&)> func){
 
 
 
-
-string Value::as_text() const{
+list<Expr::Token> Expr::Value::to_tokens() const{
   if(mode==PI){
-    return "pi";
+    Token tok(Token::NAME);
+    tok.name="pi";
+    list<Token> ret;
+    ret.push_back(tok);
+    return ret;
   }else if(mode==E){
-    return "e";
+    Token tok(Token::NAME);
+    tok.name="e";
+    list<Token> ret;
+    ret.push_back(tok);
+    return ret;
+  }else if(mode==INTEGER){
+    Token tok(Token::NUMBER);
+    tok.number=integer;
+    list<Token> ret;
+    ret.push_back(tok);
+    return ret;
   }else{
-    return tostr(integer);
+    Token tok(Token::NUMBER);
+    tok.number=real;
+    list<Token> ret;
+    ret.push_back(tok);
+    return ret;
   }
 }
 
-NodeRef Value::duplicate() const{
+Expr::NodeRef Expr::Value::duplicate() const{
   Value* dupe=new Value();
   dupe->mode=mode;
   dupe->integer=integer;
   return NodeRef(dupe);
 }
 
-bool Value::operator==(const Node& b) const{
+bool Expr::Value::operator==(const Node& b) const{
   return b.get_type()==VALUE && ((Value&)b).mode==mode && (
     mode==INTEGER && integer==((Value&)b).integer ||
     mode!=INTEGER
   );
 }
 
-size_t Value::hash() const{
+size_t Expr::Value::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
@@ -423,7 +489,7 @@ size_t Value::hash() const{
   return ret;
 }
 
-void Value::recurse(function<Expr(Expr&&)> func){
+void Expr::Value::recurse(function<Expr(Expr&&)> func){
   //has no children, do nothing
 }
 
@@ -436,21 +502,25 @@ void Value::recurse(function<Expr(Expr&&)> func){
 
 
 
-string Variable::as_text() const{
-  return name;
+list<Expr::Token> Expr::Variable::to_tokens() const{
+  Token tok(Token::NAME);
+  tok.name=name;
+  list<Token> ret;
+  ret.push_back(tok);
+  return ret;
 }
 
-NodeRef Variable::duplicate() const{
+Expr::NodeRef Expr::Variable::duplicate() const{
   Variable* dupe=new Variable();
   dupe->name=name;
   return NodeRef(dupe);
 }
 
-bool Variable::operator==(const Node& b) const{
+bool Expr::Variable::operator==(const Node& b) const{
   return b.get_type()==VARIABLE && name==((Variable&)b).name;
 }
 
-size_t Variable::hash() const{
+size_t Expr::Variable::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
@@ -462,6 +532,6 @@ size_t Variable::hash() const{
   return ret;
 }
 
-void Variable::recurse(function<Expr(Expr&&)> func){
+void Expr::Variable::recurse(function<Expr(Expr&&)> func){
   //has no children, do nothing
 }

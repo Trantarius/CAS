@@ -6,14 +6,12 @@ using namespace std;
 using namespace util;
 
 
-Expr expr_recurse(Expr&& ex,function<Expr(Expr&&)> func){
-
-  ex=func(move(ex));
-  ex.root->recurse(func);
-  return ex;
+void Expr::recurse(function<Expr(Expr&&)> func){
+  *this = func(move(*this));
+  root->recurse(func);
 }
 
-Expr substitute(Expr&& ex,ExprMap with){
+Expr substitute(Expr ex,ExprMap with){
 
   auto replace=[](Expr&& ex,const ExprMap& with){
     if(with.contains(ex)){
@@ -23,5 +21,6 @@ Expr substitute(Expr&& ex,ExprMap with){
   };
 
   function<Expr(Expr&&)> bound=bind(replace,placeholders::_1,with);
-  return expr_recurse(move(ex),bound);
+  ex.recurse(bound);
+  return ex;
 }

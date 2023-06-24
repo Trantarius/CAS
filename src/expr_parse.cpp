@@ -4,7 +4,6 @@
 using namespace std;
 using namespace util;
 using parse_error = Expr::parse_error;
-using Token = Expr::Token;
 
 
 const map<char,uchar> operator_precedence{
@@ -67,52 +66,6 @@ size_t skip_paren(string text,size_t start){
 
 
 
-//convert 'a - b' into 'a + -b'
-list<Token> sub_to_add_negate(list<Token> tokens){
-  for(auto it=++tokens.begin();it!=--tokens.end();it++){
-    if(it->type==Token::OPERATOR && it->oper=='-'){
-      auto prev=--list<Token>::iterator(it);
-      auto next=++list<Token>::iterator(it);
-      if(prev->type!=Token::OPERATOR){
-        Token tok(Token::OPERATOR);
-        tok.oper='+';
-        tokens.insert(it,tok);
-      }
-    }
-  }
-  return tokens;
-}
-
-//convert 'a / b' into 'a * /b'
-list<Token> div_to_mul_recip(list<Token> tokens){
-  for(auto it=++tokens.begin();it!=--tokens.end();it++){
-    if(it->type==Token::OPERATOR && it->oper=='/'){
-      auto prev=--list<Token>::iterator(it);
-      auto next=++list<Token>::iterator(it);
-      if(prev->type!=Token::OPERATOR){
-        Token tok(Token::OPERATOR);
-        tok.oper='*';
-        tokens.insert(it,tok);
-      }
-    }
-  }
-  return tokens;
-}
-
-//convert '5n' to '5*n'
-list<Token> adj_coefficient(list<Token> tokens){
-  for(auto it=tokens.begin();it!=--tokens.end();it++){
-    auto next=it;
-    next++;
-    if(it->type!=Token::OPERATOR && next->type!=Token::OPERATOR){
-      Token tok(Token::OPERATOR);
-      tok.oper='*';
-      tokens.insert(next,tok);
-      it++;
-    }
-  }
-  return tokens;
-}
 
 
 
@@ -127,9 +80,7 @@ list<Token> adj_coefficient(list<Token> tokens){
 
 
 
-
-
-list<Token> tokenize(string text,size_t start,size_t end){
+list<Expr::Token> Expr::string_to_tokens(string text,size_t start,size_t end){
   list<Token> tokens;
   for(size_t idx=start;idx<end;){
 
@@ -140,7 +91,7 @@ list<Token> tokenize(string text,size_t start,size_t end){
     else if(text[idx]=='('){
       size_t end=skip_paren(text,idx);
       Token tok(Token::PARENTHESES);
-      tok.subtokens=tokenize(text,idx+1,end);
+      tok.subtokens=string_to_tokens(text,idx+1,end);
       tokens.push_back(tok);
       idx=end+1;
     }
@@ -178,22 +129,58 @@ list<Token> tokenize(string text,size_t start,size_t end){
   }
 
 
-  tokens=adj_coefficient(tokens);
-  tokens=sub_to_add_negate(tokens);
-  tokens=div_to_mul_recip(tokens);
+
+  //convert '5n' to '5*n'
+  for(auto it=tokens.begin();it!=--tokens.end();it++){
+    auto next=it;
+    next++;
+    if(it->type!=Token::OPERATOR && next->type!=Token::OPERATOR){
+      Token tok(Token::OPERATOR);
+      tok.oper='*';
+      tokens.insert(next,tok);
+      it++;
+    }
+  }
+
+
+  //convert 'a-b' to 'a+-b'
+  for(auto it=++tokens.begin();it!=--tokens.end();it++){
+    if(it->type==Token::OPERATOR && it->oper=='-'){
+      auto prev=--list<Token>::iterator(it);
+      auto next=++list<Token>::iterator(it);
+      if(prev->type!=Token::OPERATOR){
+        Token tok(Token::OPERATOR);
+        tok.oper='+';
+        tokens.insert(it,tok);
+      }
+    }
+  }
+
+  //convert 'a/b' to 'a*/b'
+  for(auto it=++tokens.begin();it!=--tokens.end();it++){
+    if(it->type==Token::OPERATOR && it->oper=='/'){
+      auto prev=--list<Token>::iterator(it);
+      auto next=++list<Token>::iterator(it);
+      if(prev->type!=Token::OPERATOR){
+        Token tok(Token::OPERATOR);
+        tok.oper='*';
+        tokens.insert(it,tok);
+      }
+    }
+  }
 
   return tokens;
 }
 
-string tokens_string(list<Token> tokens){
+string Expr::tokens_to_string(list<Token> tokens){
   string str;
   for(Token token : tokens){
     str+=(string)token+" ";
   }
-  return str;
+  return str.substr(0,str.size()-1);
 }
 
-list<list<Token>> split_tokens(list<Token> tokens,char oper){
+list<list<Expr::Token>> Expr::split_tokens(list<Token> tokens,char oper){
   list<list<Token>> parts;
   parts.push_back(list<Token>());
   auto current_part=parts.begin();
@@ -208,7 +195,7 @@ list<list<Token>> split_tokens(list<Token> tokens,char oper){
   return parts;
 }
 
-Expr expr_from_tokens(list<Token> tokens){
+Expr Expr::tokens_to_expr(list<Token> tokens){
   if(tokens.empty()){
     throw parse_error("Can't make expression from empty tokens");
   }
@@ -224,7 +211,7 @@ Expr expr_from_tokens(list<Token> tokens){
 
   if(highest_op==CHAR_MAX){
     if(tokens.size()!=1){
-      throw parse_error("Adjacent tokens without operator: "+tokens_string(tokens));
+      throw parse_error("Adjacent tokens without operator: "+tokens_to_string(tokens));
     }
 
     Token token=*tokens.begin();
@@ -252,10 +239,10 @@ Expr expr_from_tokens(list<Token> tokens){
       return Expr(val);
     }
     else if(token.type==Token::PARENTHESES){
-      return expr_from_tokens(token.subtokens);
+      return tokens_to_expr(token.subtokens);
     }
     else{
-      throw parse_error("unparseable tokens: "+tokens_string(tokens));
+      throw parse_error("unparseable tokens: "+tokens_to_string(tokens));
     }
   }
 
@@ -264,10 +251,10 @@ Expr expr_from_tokens(list<Token> tokens){
     Expr sum;
     list<list<Token>> parts=split_tokens(tokens,'+');
     auto it=parts.begin();
-    sum=expr_from_tokens(*it);
+    sum=tokens_to_expr(*it);
     it++;
     for(;it!=parts.end();it++){
-      sum = move(sum) + expr_from_tokens(*it);
+      sum = move(sum) + tokens_to_expr(*it);
     }
     return sum;
   }
@@ -277,10 +264,10 @@ Expr expr_from_tokens(list<Token> tokens){
     Expr prod;
     list<list<Token>> parts=split_tokens(tokens,'*');
     auto it=parts.begin();
-    prod=expr_from_tokens(*it);
+    prod=tokens_to_expr(*it);
     it++;
     for(;it!=parts.end();it++){
-      prod = move(prod) * expr_from_tokens(*it);
+      prod = move(prod) * tokens_to_expr(*it);
     }
     return prod;
   }
@@ -295,8 +282,8 @@ Expr expr_from_tokens(list<Token> tokens){
     tokens.pop_back();
 
     Power* pwr=new Power();
-    pwr->base=expr_from_tokens(tokens);
-    pwr->power=expr_from_tokens(exptok);
+    pwr->base=tokens_to_expr(tokens);
+    pwr->power=tokens_to_expr(exptok);
 
     return Expr(NodeRef(pwr));
   }
@@ -305,12 +292,12 @@ Expr expr_from_tokens(list<Token> tokens){
 
     Token start=*tokens.begin();
     if(start.type!=Token::OPERATOR || start.oper!='/'){
-      throw parse_error("expected reciprocal: "+tokens_string(tokens));
+      throw parse_error("expected reciprocal: "+tokens_to_string(tokens));
     }
     tokens.pop_front();
 
     Reciprocal* rec=new Reciprocal();
-    rec->sub=expr_from_tokens(tokens);
+    rec->sub=tokens_to_expr(tokens);
     return Expr(NodeRef(rec));
   }
 
@@ -318,23 +305,23 @@ Expr expr_from_tokens(list<Token> tokens){
 
     Token start=*tokens.begin();
     if(start.type!=Token::OPERATOR || start.oper!='-'){
-      throw parse_error("expected negation: "+tokens_string(tokens));
+      throw parse_error("expected negation: "+tokens_to_string(tokens));
     }
     tokens.pop_front();
 
     Negate* neg=new Negate();
-    neg->sub=expr_from_tokens(tokens);
+    neg->sub=tokens_to_expr(tokens);
     return Expr(NodeRef(neg));
   }
 
   else{
-    throw parse_error("unparseable tokens: "+tokens_string(tokens));
+    throw parse_error("unparseable tokens: "+tokens_to_string(tokens));
   }
 }
 
 Expr::Expr(string text){
   try{
-    *this=expr_from_tokens(tokenize(text,0,text.size()));
+    *this=tokens_to_expr(string_to_tokens(text,0,text.size()));
   }
   catch(parse_error& err){
     throw parse_error(err.what()+string("\nInput: \'")+text+"\'");

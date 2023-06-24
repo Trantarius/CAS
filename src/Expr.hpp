@@ -6,52 +6,17 @@
 #include <unordered_map>
 #include <functional>
 
-enum ExprType:char{
-  SUM='s',NEGATE='n',PRODUCT='p',RECIPROCAL='r',POWER='e',VALUE='l',VARIABLE='b'
-};
+class Expr{
 
-
-class Expr;
-class Node;
-typedef std::unique_ptr<Node> NodeRef;
-
-struct Sum;
-struct Product;
-struct Reciprocal;
-struct Negate;
-struct Power;
-struct Value;
-struct Variable;
-
-class Node{
-  virtual void recurse(std::function<Expr(Expr&&)> func)=0;
-
-public:
-  virtual ExprType get_type() const=0;
-  virtual std::string as_text() const=0;
-  virtual NodeRef duplicate() const=0;
-  virtual bool operator==(const Node& b) const=0;
-  virtual size_t hash() const=0;
-
-  friend class Expr;
-  friend struct Sum;
-  friend struct Product;
-  friend struct Reciprocal;
-  friend struct Negate;
-  friend struct Power;
-  friend struct Value;
-  friend struct Variable;
-  friend Expr expr_recurse(Expr&&,std::function<Expr(Expr&&)>);
-};
-
-struct Expr{
-
-  struct parse_error : std::logic_error{
-    parse_error(std::string msg):std::logic_error(msg){}
+  struct Token;
+  struct Node;
+  typedef std::unique_ptr<Node> NodeRef;
+  enum Type:char{
+    SUM='s',NEGATE='n',PRODUCT='p',RECIPROCAL='r',POWER='e',VALUE='l',VARIABLE='b'
   };
 
   struct Token{
-    const enum Type{NUMBER,NAME,OPERATOR,PARENTHESES} type;
+    enum Type{NUMBER,NAME,OPERATOR,PARENTHESES} type;
     uint64_t number;
     std::string name;
     char oper;
@@ -74,22 +39,43 @@ struct Expr{
     }
   };
 
+  struct Node{
+    virtual void recurse(std::function<Expr(Expr&&)> func)=0;
+    virtual Type get_type() const=0;
+    virtual std::list<Token> to_tokens() const=0;
+    virtual NodeRef duplicate() const=0;
+    virtual bool operator==(const Node& b) const=0;
+    virtual size_t hash() const=0;
+  };
+
+  struct Sum;
+  struct Product;
+  struct Reciprocal;
+  struct Negate;
+  struct Power;
+  struct Value;
+  struct Variable;
+
   NodeRef root=nullptr;
 
-  ExprType get_type() const{
-    return root->get_type();
-  }
-  std::string as_text() const{
-    return root->as_text();
-  }
-  Expr duplicate() const{
-    return Expr(*this);
-  }
+  void recurse(std::function<Expr(Expr&&)>);
 
+  // internal text functions
+  static std::list<Token> string_to_tokens(std::string,size_t,size_t);
+  static std::string tokens_to_string(std::list<Token>);
+  static std::list<std::list<Token>> split_tokens(std::list<Token> tokens,char oper);
+  static Expr tokens_to_expr(std::list<Token>);
+  static std::list<Token> expr_to_tokens(const Expr&);
+
+public:
   bool is_null() const{
     return root==nullptr;
   }
 
+  std::string as_text() const{
+    return tokens_to_string(root->to_tokens());
+  }
+private:
   template<typename T> T& as();
 
   #define ASFUNC(type,tval)                                                                 \
@@ -114,15 +100,26 @@ struct Expr{
 
   #undef ASFUNC
 
+  Expr(NodeRef&& root):root(std::move(root)){}
+  Expr(const NodeRef& root):root(root->duplicate()){}
+  Expr(const Node& root):root(root.duplicate()){}
+
+public:
+
+  struct parse_error : std::logic_error{
+    parse_error(std::string msg):std::logic_error(msg){}
+  };
 
   Expr(){}
   Expr(Expr&& b):root(std::move(b.root)){}
   Expr(const Expr& b):root(b.root->duplicate()){}
-  Expr(NodeRef&& root):root(std::move(root)){}
-  Expr(const NodeRef& root):root(root->duplicate()){}
-  Expr(const Node& root):root(root.duplicate()){}
   Expr(std::string text);
   Expr(int64_t val);
+
+
+
+
+  // Operators
 
   void operator = (const Expr& b){
     root=b.root->duplicate();
@@ -132,7 +129,7 @@ struct Expr{
   }
 
   operator std::string() const{
-    return as_text();
+    return tokens_to_string(root->to_tokens());
   }
 
   bool operator==(const Expr& b) const{
@@ -151,11 +148,24 @@ struct Expr{
     }
   };
 
-
   Expr operator()(std::unordered_map<Expr,Expr,Expr::Hash> with) const;
 
   template<typename T> requires std::is_arithmetic<T>::value
   double operator()(T num) const;
+
+  friend Expr operator+(Expr,Expr);
+  friend Expr operator-(Expr,Expr);
+  friend Expr operator*(Expr,Expr);
+  friend Expr operator/(Expr,Expr);
+  friend Expr operator-(Expr);
+
+
+
+  // Utility Functions
+
+  friend Expr substitute(Expr ex,std::unordered_map<Expr,Expr,Expr::Hash> with);
+  friend Expr reduce(Expr ex);
+
 };
 
 
@@ -164,50 +174,9 @@ using ExprMap=std::unordered_map<Expr,Expr,Expr::Hash>;
 
 #include "ExprNodes.hpp"
 
-#define VAR(name)\
-Expr name(NodeRef(new Variable(#name)))
+#define VAR(name) Expr name(#name)
 
-
-#define EXPR_OP(op)\
-Expr operator op (Expr&& a,Expr&& b);\
-inline Expr operator op (const Expr& a,const Expr& b){\
-  return Expr(a) op Expr(b);\
-}\
-inline Expr operator op(const Expr& a,Expr&& b){\
-  return Expr(a) op std::move(b);\
-}\
-inline Expr operator op(Expr&& a,const Expr& b){\
-  return std::move(a) op Expr(b);\
-}
-
-EXPR_OP(+);
-EXPR_OP(-);
-EXPR_OP(*);
-EXPR_OP(/);
-
-#undef EXPR_OP
-
-Expr operator - (     Expr&& a);
-inline Expr operator - (const Expr& a){
-  return -Expr(a);
-}
-
-
-
-
-
-Expr expr_recurse(Expr&& ex,std::function<Expr(Expr&&)> func);
-
-Expr substitute(Expr&& ex,ExprMap with);
-inline Expr substitute(const Expr& ex,ExprMap with){
-  return substitute(Expr(ex),std::move(with));
-}
-inline Expr substitute(const Expr& ex,const Expr& what,const Expr& with){
-  return substitute(Expr(ex),ExprMap{{what,with}});
-}
-
-Expr reduce(Expr&& ex);
-inline Expr reduce(const Expr& ex){
-  return reduce(Expr(ex));
+inline Expr substitute(Expr ex,const Expr& what,const Expr& with){
+  return substitute(std::move(ex),ExprMap{{what,with}});
 }
 

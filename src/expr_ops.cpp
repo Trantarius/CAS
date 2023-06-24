@@ -3,17 +3,12 @@
 using namespace std;
 using namespace util;
 
-/*
-Expr Expr::operator()(map<Expr,Expr> with) const{
-  return substitute(Expr(*this),move(with));
-}
-*/
 
-Expr operator + (Expr&& a,Expr&& b){
-  Sum* sum=new Sum();
+Expr operator + (Expr a,Expr b){
+  Expr::Sum* sum=new Expr::Sum();
 
-  if(a.get_type()==SUM){
-    for(Expr& t : a.as<Sum>().sub){
+  if(a.root->get_type()==Expr::SUM){
+    for(Expr& t : a.as<Expr::Sum>().sub){
       sum->sub.push_back(move(t));
     }
   }
@@ -21,8 +16,8 @@ Expr operator + (Expr&& a,Expr&& b){
     sum->sub.push_back(move(a));
   }
 
-  if(b.get_type()==SUM){
-    for(Expr& t : b.as<Sum>().sub){
+  if(b.root->get_type()==Expr::SUM){
+    for(Expr& t : b.as<Expr::Sum>().sub){
       sum->sub.push_back(move(t));
     }
   }
@@ -30,14 +25,14 @@ Expr operator + (Expr&& a,Expr&& b){
     sum->sub.push_back(move(b));
   }
 
-  return Expr(NodeRef(sum));
+  return Expr(Expr::NodeRef(sum));
 }
 
-Expr operator * (Expr&& a,Expr&& b){
-  Product* prod=new Product();
+Expr operator * (Expr a,Expr b){
+  Expr::Product* prod=new Expr::Product();
 
-  if(a.get_type()==PRODUCT){
-    for(Expr& t : a.as<Product>().sub){
+  if(a.root->get_type()==Expr::PRODUCT){
+    for(Expr& t : a.as<Expr::Product>().sub){
       prod->sub.push_back(move(t));
     }
   }
@@ -45,8 +40,8 @@ Expr operator * (Expr&& a,Expr&& b){
     prod->sub.push_back(move(a));
   }
 
-  if(b.get_type()==PRODUCT){
-    for(Expr& t : b.as<Product>().sub){
+  if(b.root->get_type()==Expr::PRODUCT){
+    for(Expr& t : b.as<Expr::Product>().sub){
       prod->sub.push_back(move(t));
     }
   }
@@ -54,30 +49,23 @@ Expr operator * (Expr&& a,Expr&& b){
     prod->sub.push_back(move(b));
   }
 
-  return Expr(NodeRef(prod));
+  return Expr(Expr::NodeRef(prod));
 }
 
-Expr operator - (Expr&& a,Expr&& b){
+Expr operator - (Expr a,Expr b){
   return move(a)+-move(b);
 }
 
-Expr operator / (Expr&& a,Expr&& b){
-  Reciprocal* rec=new Reciprocal();
+Expr operator / (Expr a,Expr b){
+  Expr::Reciprocal* rec=new Expr::Reciprocal();
   rec->sub=move(b);
-  return move(a)*Expr(NodeRef(rec));
+  return move(a)*Expr(Expr::NodeRef(rec));
 }
 
-Expr operator ^ (const Expr& a,const Expr& b){
-  Power* pwr=new Power();
-  pwr->base=a;
-  pwr->power=b;
-  return Expr(NodeRef(pwr));
-}
-
-Expr operator - (Expr&& a){
-  Negate* neg=new Negate();
+Expr operator - (Expr a){
+  Expr::Negate* neg=new Expr::Negate();
   neg->sub=move(a);
-  return Expr(NodeRef(neg));
+  return Expr(Expr::NodeRef(neg));
 }
 
 Expr Expr::operator()(ExprMap with) const{
