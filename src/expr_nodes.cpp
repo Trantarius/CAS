@@ -1,4 +1,5 @@
 #include "Expr.hpp"
+#include "ExprNodes.hpp"
 #include <misc.hpp>
 #include <list>
 
@@ -10,7 +11,77 @@ string parenthesis(string in){
   return "("+in+")";
 }
 
-list<Expr::Token> Expr::Sum::to_tokens() const{
+
+
+
+// Default
+
+void Expr::recurse(function<Expr(Expr&&)> func){
+  *this=func(move(*this));
+  root->recurse(func);
+}
+
+list<Expr::Token> Expr::to_tokens() const{
+  return root->to_tokens();
+}
+
+Expr::ExprTypeID Expr::get_type() const{
+  return root->get_type();
+}
+
+Expr Expr::duplicate() const{
+  return root->duplicate();
+}
+
+bool Expr::operator==(const Expr& b) const{
+  return *root==b;
+}
+
+size_t Expr::hash() const{
+  return root->hash();
+}
+
+bool Expr::is_null() const{
+  return root==nullptr || root->is_null();
+}
+
+Expr* Expr::operator&(){
+  return root.get();
+}
+
+const Expr* Expr::operator&() const {
+  return root.get();
+}
+
+void Expr::operator=(Expr&& b){
+  root=unique_ptr<Expr>(b.move_me());
+}
+
+void Expr::tree_view_rec(string tab,string branch,string& view) const{
+  root->tree_view_rec(tab,branch,view);
+}
+
+
+// Sum
+
+Expr* Sum::move_me() {
+  Sum* donor=new Sum();
+  donor->sub.swap(sub);
+  return donor;
+}
+
+Expr::ExprTypeID Sum::get_type() const{
+  return Sum::id;
+}
+
+void Sum::recurse(function<Expr(Expr&&)> func){
+  for(auto it=sub.begin();it!=sub.end();it++){
+    (*it)=func(move(*it));
+    (*it).recurse(func);
+  }
+}
+
+list<Expr::Token> Sum::to_tokens() const{
   list<Token> ret;
   for(auto it=sub.begin();it!=sub.end();it++){
     if(it!=sub.begin()){
@@ -19,41 +90,40 @@ list<Expr::Token> Expr::Sum::to_tokens() const{
       ret.push_back(tok);
     }
 
-    list<Token> toks=it->root->to_tokens();
+    list<Token> toks=it->to_tokens();
     Token paren(Token::PARENTHESES);
     paren.subtokens=toks;
 
-    switch(it->root->get_type()){
+    switch(it->get_type()){
 
-      case SUM:
+      case Sum::id:
         ret.push_back(paren);
         break;
-      case NEGATE:
-      case PRODUCT:
-      case RECIPROCAL:
-      case POWER:
-      case VALUE:
-      case VARIABLE:
+      case Negate::id:
+      case Product::id:
+      case Reciprocal::id:
+      case Power::id:
+      case Value::id:
+      case Variable::id:
         ret.splice(ret.end(),toks);
     }
   }
   return ret;
 }
 
-Expr::NodeRef Expr::Sum::duplicate() const{
+Expr Sum::duplicate() const{
   Sum* dupe=new Sum();
   for(auto it=sub.begin();it!=sub.end();it++){
-    dupe->sub.push_back(Expr(*it));
+    dupe->sub.push_back(it->duplicate());
   }
-  return NodeRef(dupe);
+  return Expr(dupe);
 }
 
-bool Expr::Sum::operator==(const Node& b) const{
-  if(b.get_type()!=SUM){
+bool Sum::operator==(const Expr& b) const{
+  if(b.get_type()!=Sum::id){
     return false;
   }
-
-  list<Expr> bsub=((Sum&)b).sub;
+  const list<Expr>& bsub=b.as<Sum>().sub;
   if(sub.size()!=bsub.size()){
     return false;
   }
@@ -70,11 +140,11 @@ bool Expr::Sum::operator==(const Node& b) const{
   return true;
 }
 
-size_t Expr::Sum::hash() const{
+size_t Sum::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
-    ret^=SUM<<n;
+    ret^=Sum::id<<n;
   }
 
   int roll=0;
@@ -88,20 +158,60 @@ size_t Expr::Sum::hash() const{
   return ret;
 }
 
-void Expr::Sum::recurse(function<Expr(Expr&&)> func){
-  for(auto it=sub.begin();it!=sub.end();it++){
-    (*it)=func(move(*it));
-    (*it).root->recurse(func);
+bool Sum::is_null() const {
+  return sub.empty();
+}
+
+void Sum::operator=(Expr&& b){
+  if(b.get_type()!=Sum::id){
+    throw logic_error("Attempted to assign to a SubExpr with wrong ExprType");
   }
+
+  sub.swap(b.as<Sum>().sub);
+}
+
+void Sum::tree_view_rec(string tab,string branch,string& view) const{
+  view+=tab+branch+"Sum\n";
+
+  if(branch=="└─"){
+    tab+="  ";
+  }
+  else if(branch=="├─"){
+    tab+="│ ";
+  }
+
+  auto it=sub.begin();
+  for(;it!=--(sub.end());it++){
+    it->tree_view_rec(tab,"├─",view);
+  }
+  it->tree_view_rec(tab,"└─",view);
 }
 
 
 
 
 
+// Product
 
 
-list<Expr::Token> Expr::Product::to_tokens() const{
+Expr* Product::move_me() {
+  Product* donor=new Product();
+  donor->sub.swap(sub);
+  return donor;
+}
+
+Expr::ExprTypeID Product::get_type() const{
+  return Product::id;
+}
+
+void Product::recurse(function<Expr(Expr&&)> func){
+  for(auto it=sub.begin();it!=sub.end();it++){
+    (*it)=func(move(*it));
+    (*it).recurse(func);
+  }
+}
+
+list<Expr::Token> Product::to_tokens() const{
   list<Token> ret;
   for(auto it=sub.begin();it!=sub.end();it++){
     if(it!=sub.begin()){
@@ -110,41 +220,41 @@ list<Expr::Token> Expr::Product::to_tokens() const{
       ret.push_back(tok);
     }
 
-    list<Token> toks=it->root->to_tokens();
+    list<Token> toks=it->to_tokens();
     Token paren(Token::PARENTHESES);
     paren.subtokens=toks;
 
-    switch(it->root->get_type()){
+    switch(it->get_type()){
 
-      case SUM:
-      case PRODUCT:
+      case Sum::id:
+      case Product::id:
         ret.push_back(paren);
         break;
-      case NEGATE:
-      case RECIPROCAL:
-      case POWER:
-      case VALUE:
-      case VARIABLE:
+      case Negate::id:
+      case Reciprocal::id:
+      case Power::id:
+      case Value::id:
+      case Variable::id:
         ret.splice(ret.end(),toks);
     }
   }
   return ret;
 }
 
-Expr::NodeRef Expr::Product::duplicate() const{
+Expr Product::duplicate() const{
   Product* dupe=new Product();
   for(auto it=sub.begin();it!=sub.end();it++){
-    dupe->sub.push_back(Expr(*it));
+    dupe->sub.push_back(it->duplicate());
   }
-  return NodeRef(dupe);
+  return Expr(dupe);
 }
 
-bool Expr::Product::operator==(const Node& b) const{
-  if(b.get_type()!=PRODUCT){
+bool Product::operator==(const Expr& b) const{
+  if(b.get_type()!=Product::id){
     return false;
   }
 
-  list<Expr> bsub=((Product&)b).sub;
+  const list<Expr>& bsub=b.as<Product>().sub;
   if(sub.size()!=bsub.size()){
     return false;
   }
@@ -161,11 +271,11 @@ bool Expr::Product::operator==(const Node& b) const{
   return true;
 }
 
-size_t Expr::Product::hash() const{
+size_t Product::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
-    ret^=PRODUCT<<n;
+    ret^=Product::id<<n;
   }
 
   int roll=0;
@@ -179,21 +289,55 @@ size_t Expr::Product::hash() const{
   return ret;
 }
 
-void Expr::Product::recurse(function<Expr(Expr&&)> func){
-  for(auto it=sub.begin();it!=sub.end();it++){
-    (*it)=func(move(*it));
-    (*it).root->recurse(func);
+bool Product::is_null() const {
+  return sub.empty();
+}
+
+void Product::operator=(Expr&& b){
+  if(b.get_type()!=Product::id){
+    throw logic_error("Attempted to assign to a SubExpr with wrong ExprType");
   }
+
+  sub.swap(b.as<Product>().sub);
+}
+
+void Product::tree_view_rec(string tab,string branch,string& view) const{
+  view+=tab+branch+"Product\n";
+  if(branch=="└─"){
+    tab+="  ";
+  }
+  else if(branch=="├─"){
+    tab+="│ ";
+  }
+  auto it=sub.begin();
+  for(;it!=--(sub.end());it++){
+    it->tree_view_rec(tab,"├─",view);
+  }
+  it->tree_view_rec(tab,"└─",view);
 }
 
 
 
 
+// Reciprocal
 
+Expr* Reciprocal::move_me() {
+  Reciprocal* donor=new Reciprocal();
+  donor->sub=move(sub);
+  return donor;
+}
 
-list<Expr::Token> Expr::Reciprocal::to_tokens() const{
+Expr::ExprTypeID Reciprocal::get_type() const{
+  return Reciprocal::id;
+}
 
-  list<Token> toks=sub.root->to_tokens();
+void Reciprocal::recurse(function<Expr(Expr&&)> func){
+  sub=func(move(sub));
+  sub.recurse(func);
+}
+
+list<Expr::Token> Reciprocal::to_tokens() const{
+  list<Token> toks=sub.to_tokens();
   Token paren(Token::PARENTHESES);
   paren.subtokens=toks;
 
@@ -203,40 +347,42 @@ list<Expr::Token> Expr::Reciprocal::to_tokens() const{
   ret.push_front(op);
 
 
-  switch(sub.root->get_type()){
+  switch(sub.get_type()){
 
-    case SUM:
-    case PRODUCT:
-    case RECIPROCAL:
-    case POWER:
+    case Sum::id:
+    case Product::id:
+    case Reciprocal::id:
+    case Power::id:
       ret.push_back(paren);
-      return ret;
-    case NEGATE:
-    case VALUE:
-    case VARIABLE:
+      break;
+    case Negate::id:
+    case Value::id:
+    case Variable::id:
       ret.splice(ret.end(),toks);
-      return ret;
+      break;
   }
+
+  return ret;
 }
 
-Expr::NodeRef Expr::Reciprocal::duplicate() const{
+Expr Reciprocal::duplicate() const{
   Reciprocal* dupe=new Reciprocal();
-  dupe->sub=sub;
-  return NodeRef(dupe);
+  dupe->sub=sub.duplicate();
+  return Expr(dupe);
 }
 
-bool Expr::Reciprocal::operator==(const Node& b) const{
-  if(b.get_type()!=RECIPROCAL){
+bool Reciprocal::operator==(const Expr& b) const{
+  if(b.get_type()!=Reciprocal::id){
     return false;
   }
-  return sub==((Reciprocal&)b).sub;
+  return sub==b.as<Reciprocal>().sub;
 }
 
-size_t Expr::Reciprocal::hash() const{
+size_t Reciprocal::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
-    ret^=RECIPROCAL<<n;
+    ret^=Reciprocal::id<<n;
   }
 
   //making this invertible gives a hacky way of recognizing Reciprocal(Reciprocal(x))==x
@@ -245,23 +391,52 @@ size_t Expr::Reciprocal::hash() const{
   return ret;
 }
 
-void Expr::Reciprocal::recurse(function<Expr(Expr&&)> func){
-  sub=func(move(sub));
-  sub.root->recurse(func);
+bool Reciprocal::is_null() const {
+  return sub.is_null();
+}
+
+void Reciprocal::operator=(Expr&& b){
+  if(b.get_type()!=Reciprocal::id){
+    throw logic_error("Attempted to assign to a SubExpr with wrong ExprType");
+  }
+
+  sub=move(b.as<Reciprocal>().sub);
+}
+
+void Reciprocal::tree_view_rec(string tab,string branch,string& view) const{
+  view+=tab+branch+"Reciprocal\n";
+  if(branch=="└─"){
+    tab+="  ";
+  }
+  else if(branch=="├─"){
+    tab+="│ ";
+  }
+  sub.tree_view_rec(tab,"└─",view);
 }
 
 
 
 
 
+// Negate
 
+Expr* Negate::move_me() {
+  Negate* donor=new Negate();
+  donor->sub=move(sub);
+  return donor;
+}
 
+Expr::ExprTypeID Negate::get_type() const{
+  return Negate::id;
+}
 
+void Negate::recurse(function<Expr(Expr&&)> func){
+  sub=func(move(sub));
+  sub.recurse(func);
+}
 
-
-list<Expr::Token> Expr::Negate::to_tokens() const{
-
-  list<Token> toks=sub.root->to_tokens();
+list<Expr::Token> Negate::to_tokens() const{
+  list<Token> toks=sub.to_tokens();
   Token paren(Token::PARENTHESES);
   paren.subtokens=toks;
 
@@ -271,40 +446,42 @@ list<Expr::Token> Expr::Negate::to_tokens() const{
   ret.push_front(op);
 
 
-  switch(sub.root->get_type()){
+  switch(sub.get_type()){
 
-    case SUM:
-    case PRODUCT:
-    case RECIPROCAL:
-    case POWER:
+    case Sum::id:
+    case Product::id:
+    case Reciprocal::id:
+    case Power::id:
       ret.push_back(paren);
-      return ret;
-    case NEGATE:
-    case VALUE:
-    case VARIABLE:
+      break;
+    case Negate::id:
+    case Value::id:
+    case Variable::id:
       ret.splice(ret.end(),toks);
-      return ret;
+      break;
   }
+
+  return ret;
 }
 
-Expr::NodeRef Expr::Negate::duplicate() const{
+Expr Negate::duplicate() const{
   Negate* dupe=new Negate();
-  dupe->sub=sub;
-  return NodeRef(dupe);
+  dupe->sub=sub.duplicate();
+  return Expr(dupe);
 }
 
-bool Expr::Negate::operator==(const Node& b) const{
-  if(b.get_type()!=NEGATE){
+bool Negate::operator==(const Expr& b) const{
+  if(b.get_type()!=Negate::id){
     return false;
   }
-  return sub==((Negate&)b).sub;
+  return sub==b.as<Negate>().sub;
 }
 
-size_t Expr::Negate::hash() const{
+size_t Negate::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
-    ret^=NEGATE<<n;
+    ret^=Negate::id<<n;
   }
 
   //making this invertible gives a hacky way of recognizing Negate(Negate(x))==x
@@ -313,44 +490,73 @@ size_t Expr::Negate::hash() const{
   return ret;
 }
 
-void Expr::Negate::recurse(function<Expr(Expr&&)> func){
-  sub=func(move(sub));
-  sub.root->recurse(func);
+bool Negate::is_null() const {
+  return sub.is_null();
+}
+
+void Negate::operator=(Expr&& b){
+  if(b.get_type()!=Negate::id){
+    throw logic_error("Attempted to assign to a SubExpr with wrong ExprType");
+  }
+
+  sub=move(b.as<Negate>().sub);
+}
+
+void Negate::tree_view_rec(string tab,string branch,string& view) const{
+  view+=tab+branch+"Negate\n";
+  if(branch=="└─"){
+    tab+="  ";
+  }
+  else if(branch=="├─"){
+    tab+="│ ";
+  }
+  sub.tree_view_rec(tab,"└─",view);
 }
 
 
 
 
 
+// Power
 
+Expr* Power::move_me() {
+  Power* donor=new Power();
+  donor->base=move(base);
+  donor->exp=move(exp);
+  return donor;
+}
 
+Expr::ExprTypeID Power::get_type() const{
+  return Power::id;
+}
 
+void Power::recurse(function<Expr(Expr&&)> func){
+  base=func(move(base));
+  base.recurse(func);
 
+  exp=func(move(exp));
+  exp.recurse(func);
+}
 
-
-
-
-
-list<Expr::Token> Expr::Power::to_tokens() const{
-
-  list<Token> toks=base.root->to_tokens();
+list<Expr::Token> Power::to_tokens() const{
+  list<Token> toks=base.to_tokens();
   Token paren(Token::PARENTHESES);
   paren.subtokens=toks;
 
   list<Token> ret;
 
 
-  switch(base.root->get_type()){
+  switch(base.get_type()){
 
-    case SUM:
-    case PRODUCT:
-    case RECIPROCAL:
-    case POWER:
-    case NEGATE:
+    case Sum::id:
+    case Product::id:
+    case Reciprocal::id:
+    case Power::id:
+    case Negate::id:
       ret.push_back(paren);
       break;
-    case VALUE:
-    case VARIABLE:
+    case Value::id:
+    case Variable::id:
       ret.splice(ret.end(),toks);
       break;
   }
@@ -359,20 +565,20 @@ list<Expr::Token> Expr::Power::to_tokens() const{
   op.oper='^';
   ret.push_back(op);
 
-  toks=power.root->to_tokens();
+  toks=exp.to_tokens();
   paren.subtokens=toks;
 
-  switch(power.root->get_type()){
+  switch(exp.get_type()){
 
-    case SUM:
-    case PRODUCT:
-    case RECIPROCAL:
-    case POWER:
-    case NEGATE:
+    case Sum::id:
+    case Product::id:
+    case Reciprocal::id:
+    case Power::id:
+    case Negate::id:
       ret.push_back(paren);
       break;
-    case VALUE:
-    case VARIABLE:
+    case Value::id:
+    case Variable::id:
       ret.splice(ret.end(),toks);
       break;
   }
@@ -380,39 +586,56 @@ list<Expr::Token> Expr::Power::to_tokens() const{
   return ret;
 }
 
-Expr::NodeRef Expr::Power::duplicate() const{
+Expr Power::duplicate() const{
   Power* dupe=new Power();
-  dupe->base=base;
-  dupe->power=power;
-  return NodeRef(dupe);
+  dupe->base=base.duplicate();
+  dupe->exp=exp.duplicate();
+  return Expr(dupe);
 }
 
-bool Expr::Power::operator==(const Node& b) const{
-  if(b.get_type()!=POWER){
+bool Power::operator==(const Expr& b) const{
+  if(b.get_type()!=Power::id){
     return false;
   }
-  return base==((Power&)b).base && power==((Power&)b).power;
+  return base==b.as<Power>().base && exp==b.as<Power>().exp;
 }
 
-size_t Expr::Power::hash() const{
+size_t Power::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
-    ret^=POWER<<n;
+    ret^=Power::id<<n;
   }
 
   ret^=bitroll(Expr::hash(base),13);
-  ret^=bitroll(Expr::hash(power),51);
+  ret^=bitroll(Expr::hash(exp),51);
 
   return ret;
 }
 
-void Expr::Power::recurse(function<Expr(Expr&&)> func){
-  base=func(move(base));
-  base.root->recurse(func);
+bool Power::is_null() const {
+  return base.is_null() || exp.is_null();
+}
 
-  power=func(move(power));
-  power.root->recurse(func);
+void Power::operator=(Expr&& b){
+  if(b.get_type()!=Power::id){
+    throw logic_error("Attempted to assign to a SubExpr with wrong ExprType");
+  }
+
+  base=move(b.as<Power>().base);
+  exp=move(b.as<Power>().exp);
+}
+
+void Power::tree_view_rec(string tab,string branch,string& view) const{
+  view+=tab+branch+"Power\n";
+  if(branch=="└─"){
+    tab+="  ";
+  }
+  else if(branch=="├─"){
+    tab+="│ ";
+  }
+  base.tree_view_rec(tab,"├─",view);
+  exp.tree_view_rec(tab,"└─",view);
 }
 
 
@@ -420,15 +643,27 @@ void Expr::Power::recurse(function<Expr(Expr&&)> func){
 
 
 
+// Value
 
+Expr* Value::move_me(){
+  Value* donor=new Value();
+  donor->mode=mode;
+  donor->number=number;
+  return donor;
+}
 
+Expr::ExprTypeID Value::get_type() const{
+  return Value::id;
+}
 
+Expr Value::duplicate() const{
+  Value* dupe=new Value();
+  dupe->mode=mode;
+  dupe->number=number;
+  return Expr(dupe);
+}
 
-
-
-
-
-list<Expr::Token> Expr::Value::to_tokens() const{
+list<Expr::Token> Value::to_tokens() const{
   if(mode==PI){
     Token tok(Token::NAME);
     tok.name="pi";
@@ -450,25 +685,20 @@ list<Expr::Token> Expr::Value::to_tokens() const{
   }
 }
 
-Expr::NodeRef Expr::Value::duplicate() const{
-  Value* dupe=new Value();
-  dupe->mode=mode;
-  dupe->number=number;
-  return NodeRef(dupe);
-}
 
-bool Expr::Value::operator==(const Node& b) const{
-  return b.get_type()==VALUE && ((Value&)b).mode==mode && (
-    mode==NUMBER && number==((Value&)b).number ||
+
+bool Value::operator==(const Expr& b) const{
+  return b.get_type()==Value::id && b.as<Value>().mode==mode && (
+    mode==NUMBER && number==b.as<Value>().number ||
     mode!=NUMBER
   );
 }
 
-size_t Expr::Value::hash() const{
+size_t Value::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
-    ret^=VALUE<<n;
+    ret^=Value::id<<n;
   }
   ret=bitroll(ret,5);
 
@@ -485,8 +715,32 @@ size_t Expr::Value::hash() const{
   return ret;
 }
 
-void Expr::Value::recurse(function<Expr(Expr&&)> func){
-  //has no children, do nothing
+bool Value::is_null() const{
+  return false;
+}
+
+void Value::operator=(Expr&& b){
+  if(b.get_type()!=Value::id){
+    throw logic_error("Attempted to assign to a SubExpr with wrong ExprType");
+  }
+
+  number=b.as<Value>().number;
+  mode=b.as<Value>().mode;
+}
+
+void Value::tree_view_rec(string tab,string branch,string& view) const{
+  view+=tab+branch+"Value: ";
+  switch(mode){
+    case PI:
+      view+="PI\n";
+      break;
+    case E:
+      view+="E\n";
+      break;
+    case NUMBER:
+      view+=mpf_to_string(number)+"\n";
+      break;
+  }
 }
 
 
@@ -495,10 +749,19 @@ void Expr::Value::recurse(function<Expr(Expr&&)> func){
 
 
 
+// Variable
 
+Expr* Variable::move_me(){
+  Variable* donor=new Variable();
+  donor->name=name;
+  return donor;
+}
 
+Expr::ExprTypeID Variable::get_type() const {
+  return Variable::id;
+}
 
-list<Expr::Token> Expr::Variable::to_tokens() const{
+list<Expr::Token> Variable::to_tokens() const{
   Token tok(Token::NAME);
   tok.name=name;
   list<Token> ret;
@@ -506,21 +769,21 @@ list<Expr::Token> Expr::Variable::to_tokens() const{
   return ret;
 }
 
-Expr::NodeRef Expr::Variable::duplicate() const{
+Expr Variable::duplicate() const{
   Variable* dupe=new Variable();
   dupe->name=name;
-  return NodeRef(dupe);
+  return Expr(dupe);
 }
 
-bool Expr::Variable::operator==(const Node& b) const{
-  return b.get_type()==VARIABLE && name==((Variable&)b).name;
+bool Variable::operator==(const Expr& b) const{
+  return b.get_type()==Variable::id && name==b.as<Variable>().name;
 }
 
-size_t Expr::Variable::hash() const{
+size_t Variable::hash() const{
 
   size_t ret=0;
   for(int n=0;n<64;n+=8){
-    ret^=VARIABLE<<n;
+    ret^=Variable::id<<n;
   }
 
   ret^=std::hash<std::string>()(name);
@@ -528,6 +791,18 @@ size_t Expr::Variable::hash() const{
   return ret;
 }
 
-void Expr::Variable::recurse(function<Expr(Expr&&)> func){
-  //has no children, do nothing
+bool Variable::is_null() const {
+  return name.empty();
+}
+
+void Variable::operator=(Expr&& b){
+  if(b.get_type()!=Variable::id){
+    throw logic_error("Attempted to assign to a SubExpr with wrong ExprType");
+  }
+
+  name=b.as<Variable>().name;
+}
+
+void Variable::tree_view_rec(string tab,string branch,string& view) const{
+  view+=tab+branch+"Variable: "+name+"\n";
 }

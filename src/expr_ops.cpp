@@ -5,51 +5,43 @@ using namespace util;
 
 
 Expr operator + (Expr a,Expr b){
-  Expr::Sum* sum=new Expr::Sum();
+  Sum sum;
 
-  if(a.root->get_type()==Expr::SUM){
-    for(Expr& t : a.as<Expr::Sum>().sub){
-      sum->sub.push_back(move(t));
-    }
+  if(a.get_type()==Sum::id){
+    sum.sub.swap(a.as<Sum>().sub);
   }
   else{
-    sum->sub.push_back(move(a));
+    sum.sub.push_back(move(a));
   }
 
-  if(b.root->get_type()==Expr::SUM){
-    for(Expr& t : b.as<Expr::Sum>().sub){
-      sum->sub.push_back(move(t));
-    }
+  if(b.get_type()==Sum::id){
+    sum.sub.splice(sum.sub.end(),b.as<Sum>().sub);
   }
   else{
-    sum->sub.push_back(move(b));
+    sum.sub.push_back(move(b));
   }
 
-  return Expr(Expr::NodeRef(sum));
+  return sum;
 }
 
 Expr operator * (Expr a,Expr b){
-  Expr::Product* prod=new Expr::Product();
+  Product prod;
 
-  if(a.root->get_type()==Expr::PRODUCT){
-    for(Expr& t : a.as<Expr::Product>().sub){
-      prod->sub.push_back(move(t));
-    }
+  if(a.get_type()==Product::id){
+    prod.sub.swap(a.as<Product>().sub);
   }
   else{
-    prod->sub.push_back(move(a));
+    prod.sub.push_back(move(a));
   }
 
-  if(b.root->get_type()==Expr::PRODUCT){
-    for(Expr& t : b.as<Expr::Product>().sub){
-      prod->sub.push_back(move(t));
-    }
+  if(b.get_type()==Product::id){
+    prod.sub.splice(prod.sub.end(),b.as<Product>().sub);
   }
   else{
-    prod->sub.push_back(move(b));
+    prod.sub.push_back(move(b));
   }
 
-  return Expr(Expr::NodeRef(prod));
+  return prod;
 }
 
 Expr operator - (Expr a,Expr b){
@@ -57,17 +49,38 @@ Expr operator - (Expr a,Expr b){
 }
 
 Expr operator / (Expr a,Expr b){
-  Expr::Reciprocal* rec=new Expr::Reciprocal();
-  rec->sub=move(b);
-  return move(a)*Expr(Expr::NodeRef(rec));
+  return move(a)*recip(move(b));
 }
 
 Expr operator - (Expr a){
-  Expr::Negate* neg=new Expr::Negate();
-  neg->sub=move(a);
-  return Expr(Expr::NodeRef(neg));
+  if(a.get_type()==Negate::id){
+    return move(a.as<Negate>().sub);
+  }else{
+    Negate neg;
+    neg.sub=move(a);
+    return move(neg);
+  }
 }
 
-Expr Expr::operator()(ExprMap with) const{
-  return substitute(Expr(*this),with);
+Expr pow(Expr a,Expr b){
+  Power ret;
+  if(a.get_type()==Power::id){
+    ret.base=move(a.as<Power>().base);
+    ret.exp = move(a.as<Power>().exp) * move(b);
+  }
+  else{
+    ret.base=move(a);
+    ret.exp=move(b);
+  }
+  return move(ret);
+}
+
+Expr recip(Expr a){
+  if(a.get_type()==Reciprocal::id){
+    return move(a.as<Reciprocal>().sub);
+  }else{
+    Reciprocal ret;
+    ret.sub=move(a);
+    return move(ret);
+  }
 }

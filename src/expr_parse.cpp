@@ -1,4 +1,5 @@
 #include "Expr.hpp"
+#include "Constants.hpp"
 #include <map>
 
 using namespace std;
@@ -17,7 +18,7 @@ const map<char,uchar> operator_precedence{
 
 
 bool is_name_char(char c){
-  return (c>='A' && c<='Z') || (c>='a' && c<='z') || c=='_';
+  return (c>='A' && c<='Z') || (c>='a' && c<='z') || c=='_' || c=='?';
 }
 
 bool is_num_char(char c){
@@ -250,25 +251,16 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
 
     if(token.type==Token::NAME){
       if(token.name=="e"){
-        Value val;
-        val.mode=Value::E;
-        return Expr(val);
+        return Constants::E;
       }
       else if(token.name=="pi"){
-        Value val;
-        val.mode=Value::PI;
-        return Expr(val);
+        return Constants::PI;
       }else{
-        Variable var;
-        var.name=token.name;
-        return Expr(var);
+        return Variable(token.name);
       }
     }
     else if(token.type==Token::NUMBER){
-      Value val;
-      val.mode=Value::NUMBER;
-      val.number=token.number;
-      return Expr(val);
+      return Value(token.number);
     }
     else if(token.type==Token::PARENTHESES){
       return tokens_to_expr(token.subtokens);
@@ -280,26 +272,20 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
 
   else if(highest_op=='+'){
 
-    Expr sum;
+    Expr sum(new Sum());
     list<list<Token>> parts=split_tokens(tokens,'+');
-    auto it=parts.begin();
-    sum=tokens_to_expr(*it);
-    it++;
-    for(;it!=parts.end();it++){
-      sum = move(sum) + tokens_to_expr(*it);
+    for(auto it=parts.begin();it!=parts.end();it++){
+      sum = sum + tokens_to_expr(*it);
     }
     return sum;
   }
 
   else if(highest_op=='*'){
 
-    Expr prod;
+    Expr prod(new Product());
     list<list<Token>> parts=split_tokens(tokens,'*');
-    auto it=parts.begin();
-    prod=tokens_to_expr(*it);
-    it++;
-    for(;it!=parts.end();it++){
-      prod = move(prod) * tokens_to_expr(*it);
+    for(auto it=parts.begin();it!=parts.end();it++){
+      prod = prod * tokens_to_expr(*it);
     }
     return prod;
   }
@@ -313,11 +299,7 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
     }
     tokens.pop_back();
 
-    Power* pwr=new Power();
-    pwr->base=tokens_to_expr(tokens);
-    pwr->power=tokens_to_expr(exptok);
-
-    return Expr(NodeRef(pwr));
+    return pow(tokens_to_expr(tokens),tokens_to_expr(exptok));
   }
 
   else if(highest_op=='/'){
@@ -328,9 +310,7 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
     }
     tokens.pop_front();
 
-    Reciprocal* rec=new Reciprocal();
-    rec->sub=tokens_to_expr(tokens);
-    return Expr(NodeRef(rec));
+    return recip(tokens_to_expr(tokens));
   }
 
   else if(highest_op=='-'){
@@ -341,9 +321,7 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
     }
     tokens.pop_front();
 
-    Negate* neg=new Negate();
-    neg->sub=tokens_to_expr(tokens);
-    return Expr(NodeRef(neg));
+    return -tokens_to_expr(tokens);
   }
 
   else{
@@ -352,7 +330,7 @@ Expr Expr::tokens_to_expr(list<Token> tokens){
 }
 
 list<Expr::Token> Expr::expr_to_tokens(const Expr& ex){
-  list<Token> tokens=ex.root->to_tokens();
+  list<Token> tokens=ex.to_tokens();
 
   return tokens;
 }
@@ -367,8 +345,6 @@ Expr::Expr(string text){
 }
 
 Expr::Expr(Number val){
-  Value* vl=new Value();
-  vl->mode=Value::NUMBER;
-  vl->number=val;
-  root=NodeRef(vl);
+  Value* vl=new Value(val);
+  root=unique_ptr<Expr>(vl);
 }

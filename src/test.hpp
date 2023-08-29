@@ -3,6 +3,7 @@
 #include <string>
 #include <typeinfo>
 #include <strings.hpp>
+#include "Timer.hpp"
 
 struct failed_test : std::logic_error{
   failed_test(std::string msg):logic_error(msg){}
@@ -20,8 +21,12 @@ if(!(cond)){                                                                    
 
 #define TEST_CASE(casename,...)                                                        \
 void test_##casename (){                                                                \
+  util::Timer testtimer;\
+  double testtook;\
   try{                                                                              \
+    testtimer.start();\
     __VA_ARGS__                                                                          \
+    testtook=testtimer.stop();\
   }                                                                                 \
   catch(failed_test& ft){                                                           \
     throw ft;                                                                       \
@@ -29,7 +34,7 @@ void test_##casename (){                                                        
   catch(std::exception& ex){                                                        \
     throw failed_test(std::string("Test threw ")+typeid(ex).name()+":\n"+ex.what()); \
   }                                                                                 \
-  util::print(#casename " test passed");\
+  util::print(#casename " test passed in ",util::Timer::format(testtook));\
 }
 
 
